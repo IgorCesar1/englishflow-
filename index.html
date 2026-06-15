@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EnglishFlow — Input Compreensível + SRS</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Importação do PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
 <body>
 
+  <!-- ═══════════════════════════════════════════════
+       HEADER / NAV
+  ═══════════════════════════════════════════════ -->
   <header class="app-header">
     <div class="brand">
       <span class="brand-icon">⟡</span>
@@ -28,6 +32,9 @@
 
   <main class="app-main">
 
+    <!-- ═══════════════════════════════════════════════
+         TAB 1: CRIAR
+    ═══════════════════════════════════════════════ -->
     <section id="tab-create" class="tab-panel active" role="tabpanel">
       <div class="panel-header">
         <h2>Adicionar Módulo / História</h2>
@@ -40,20 +47,237 @@
           <input type="text" id="moduleTitle" placeholder="Ex: Jack Hannaford — Parte 01" autocomplete="off" />
         </div>
 
+        <!-- Seleção do Modo de Entrada -->
         <div class="audio-options" style="margin-bottom: 1rem; margin-top: .5rem;">
-          <label class="radio-card" id="labelModePdf">
+          <label class="radio-card">
             <input type="radio" name="inputMode" value="pdf" checked />
             <span class="radio-icon">📄</span>
             <span>Importar por PDF</span>
           </label>
-          <label class="radio-card" id="labelModeText">
+          <label class="radio-card">
             <input type="radio" name="inputMode" value="text" />
             <span class="radio-icon">✍</span>
             <span>Apenas Colar Texto</span>
           </label>
         </div>
 
+        <!-- Área 1: Upload de PDF -->
         <div class="upload-area" id="pdfDropZone">
           <p>Clique abaixo ou arraste o <strong>PDF da história</strong> para extrair as frases automaticamente</p>
           <input type="file" id="pdfFileInput" accept=".pdf" style="margin-top: 1rem;" />
         </div>
+
+        <!-- Área 2: Colagem Manual -->
+        <div id="textInputArea" class="hidden" style="flex-direction: column; gap: 1rem;">
+          <div class="form-group">
+            <label for="rawEnglishText">Frases em Inglês (Uma por linha)</label>
+            <textarea id="rawEnglishText" rows="5" placeholder="In those days, there lived an old soldier.&#10;His coat was old and he was poor."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="rawPortugueseText">Traduções em Português (Uma por linha, na mesma ordem)</label>
+            <textarea id="rawPortugueseText" rows="5" placeholder="Naqueles dias, vivia um velho soldado.&#10;Seu casaco era velho e ele era pobre."></textarea>
+          </div>
+        </div>
+
+        <!-- O botão agora fica fixo e visível fora das áreas dinâmicas -->
+        <div class="form-actions" style="margin-top: 1.5rem;">
+          <button type="submit" class="btn btn-primary" id="btnCreateModule" style="width: 100%; justify-content: center; padding: .8rem;">✦ Processar e Criar Módulo</button>
+        </div>
+      </form>
+
+      <!-- Lista de Módulos -->
+      <div class="modules-list-section">
+        <h3>Módulos Criados <span id="moduleCount" class="count-badge">0</span></h3>
+        <div id="modulesList" class="modules-grid"></div>
+      </div>
+
+      <!-- Card Avulso -->
+      <div class="anki-section">
+        <h3>✦ Adicionar Card Avulso ao SRS (Manual)</h3>
+        <form id="anki-form" class="anki-form" onsubmit="return false;">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="ankiEnglish">Frente (Inglês)</label>
+              <input type="text" id="ankiEnglish" placeholder="Ex: like a fox" />
+            </div>
+            <div class="form-group flex-1">
+              <label for="ankiPortuguese">Verso (Tradução)</label>
+              <input type="text" id="ankiPortuguese" placeholder="Ex: como uma raposa" />
+            </div>
+          </div>
+          <button type="submit" class="btn btn-secondary" id="btnAddAnki">+ Adicionar ao SRS</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 2: ESTUDAR
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-study" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Estudar</h2>
+      </div>
+
+      <div id="studyModuleSelector" class="study-selector">
+        <div id="studyModuleList" class="modules-grid compact"></div>
+        <p id="noModulesMsg" class="empty-state hidden">Nenhum módulo criado ainda.</p>
+      </div>
+
+      <div id="studyArea" class="study-area hidden">
+        <div class="study-header" style="flex-direction: column; align-items: stretch; gap: .5rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <button class="btn btn-ghost btn-sm" id="btnBackToModules">← Voltar</button>
+            <h3 id="studyTitle" class="study-title" style="margin-left: 1rem;"></h3>
+          </div>
+          
+          <div style="background: var(--surface-2); padding: .75rem; border-radius: var(--r-md); margin-top: .5rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+              <label style="font-size: 0.75rem; font-weight: bold; color: var(--text-md); display: block; margin-bottom: 2px;">NARRADOR / SOTAQUE</label>
+              <select id="studyVoiceSelector" class="select-control" style="padding: .4rem; font-size: .85rem; background: var(--surface);"></select>
+            </div>
+            <div>
+              <label style="font-size: 0.75rem; font-weight: bold; color: var(--text-md); display: block; margin-bottom: 2px;">VELOCIDADE</label>
+              <select id="studyRateSelector" class="select-control" style="padding: .4rem; font-size: .85rem; width: 110px; background: var(--surface);">
+                <option value="0.5">0.5x (Lentíssimo)</option>
+                <option value="0.65">0.65x (Lento)</option>
+                <option value="0.75" selected>0.75x (Professor)</option>
+                <option value="0.9">0.9x (Normal)</option>
+                <option value="1.0">1.0x (Nativo)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="audio-options" style="margin-bottom: 1.5rem; background: var(--surface); padding: .5rem; border-radius: var(--r-md); margin-top: 1rem;">
+          <button class="btn btn-ghost flex-1 active" id="subTabLinha" style="border: none;">Linha a linha</button>
+          <button class="btn btn-ghost flex-1" id="subTabTextoAudio" style="border: none;">Texto + áudio</button>
+        </div>
+
+        <div class="progress-bar-wrap">
+          <div id="studyProgress" class="progress-bar"></div>
+        </div>
+
+        <div id="containerLinhaLinha" class="sentences-list"></div>
+
+        <div id="containerTextoAudio" class="hidden" style="background: var(--surface); padding: 1.5rem; border-radius: var(--r-lg); border: 1px solid var(--border);">
+          <div class="study-global-controls" style="margin-bottom: 1.5rem; background: var(--surface-2); padding: 1rem; border-radius: var(--r-md); justify-content: center;">
+            <button class="btn btn-accent" id="btnPlayAll">▶ Tocar História Completa</button>
+            <button class="btn btn-secondary" id="btnStopAll">■ Parar Áudio</button>
+          </div>
+          <p id="fullTextParagraphs" style="font-size: 1.15rem; line-height: 1.8; color: var(--text-hi); text-align: justify;"></p>
+        </div>
+
+        <div style="margin-top: 2rem; padding: 1.5rem; text-align: center; border-top: 1px solid var(--border);">
+          <button class="btn btn-accent" id="btnAddToPlaylistComplete">♫ Adicionar Áudio Completo à Playlist</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 3: REVISÃO DIÁRIA (SRS)
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-review" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Revisão Diária</h2>
+        <p class="panel-sub" id="reviewSubtitle">Carregando...</p>
+      </div>
+
+      <div id="reviewArea" class="review-area">
+        <div id="reviewCard" class="srs-card">
+          <div class="card-front">
+            <div class="card-tag">inglês</div>
+            <p id="cardFront" class="card-text"></p>
+            <button class="btn btn-ghost card-audio-btn" id="cardPlayAudio">🔊 Ouvir Frase</button>
+          </div>
+          <div class="card-back hidden">
+            <div class="card-tag">tradução</div>
+            <p id="cardBack" class="card-translation"></p>
+          </div>
+        </div>
+
+        <div id="cardShowBtn" class="card-actions-row">
+          <button class="btn btn-primary" id="btnRevealCard">Mostrar Tradução</button>
+        </div>
+
+        <div id="cardFeedbackBtns" class="card-feedback hidden">
+          <button class="btn btn-feedback btn-again"  data-quality="0">✗ Errei</button>
+          <button class="btn btn-feedback btn-hard"   data-quality="1">△ Difícil</button>
+          <button class="btn btn-feedback btn-good"   data-quality="3">○ Bom</button>
+          <button class="btn btn-feedback btn-easy"   data-quality="5">★ Fácil</button>
+        </div>
+      </div>
+
+      <div id="reviewEmpty" class="review-done hidden">
+        <div class="done-icon">◈</div>
+        <h3>Tudo revisado por hoje!</h3>
+      </div>
+      <div id="reviewDone" class="review-done hidden">
+        <div class="done-icon">✦</div>
+        <h3>Sessão concluída!</h3>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 4: PLAYLIST
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-playlist" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Playlist de Listening Passivo</h2>
+      </div>
+      <div class="playlist-controls">
+        <button class="btn btn-primary" id="btnPlayPlaylist">▶ Iniciar Playlist</button>
+        <button class="btn btn-ghost" id="btnPausePlaylist">⏸ Pausar</button>
+        <button class="btn btn-ghost" id="btnStopPlaylist">■ Parar</button>
+        <label class="toggle-label"><input type="checkbox" id="playlistLoop" /> <span>Loop</span></label>
+        <label class="toggle-label"><input type="checkbox" id="playlistShowText" checked /> <span>Mostrar Texto</span></label>
+      </div>
+      <div class="playlist-player">
+        <div class="now-playing">
+          <p id="npText" class="np-text">—</p>
+          <p id="npTranslation" class="np-translation">—</p>
+          <div class="np-progress"><div id="npProgressBar" class="np-bar"></div></div>
+        </div>
+      </div>
+      <div id="playlistItems" class="playlist-items"></div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 5: CONFIGURAÇÕES
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-settings" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Configurações</h2>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h3>💾 Cópia de Segurança (Backup)</h3>
+          <div class="settings-actions" style="margin-top: 1rem;">
+            <button class="btn btn-primary" id="btnExport">⬇ Exportar Progresso</button>
+            <label class="btn btn-secondary" for="importFile" style="cursor:pointer;">⬆ Importar Arquivo</label>
+            <input type="file" id="importFile" accept=".json" class="hidden" />
+          </div>
+        </div>
+        <div class="settings-card danger-zone">
+          <h3>⚠ Redefinição</h3>
+          <button class="btn btn-danger" id="btnClearAll" style="margin-top: 1rem;">🗑 Limpar Tudo</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="confirmModal" class="modal-overlay hidden">
+    <div class="modal">
+      <p id="confirmMsg" class="modal-msg"></p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="confirmCancel">Cancelar</button>
+        <button class="btn btn-danger" id="confirmOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
