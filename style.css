@@ -116,6 +116,7 @@ textarea { resize: vertical; }
   border-radius: 20px;
   font-size: .78rem;
   font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 /* ── Main / Tabs ─────────────────────────────────────────────── */
@@ -152,6 +153,7 @@ textarea { resize: vertical; }
 .btn-secondary:hover { background: var(--border-2); }
 .btn-ghost    { background: transparent;        color: var(--text-md); border-color: var(--border); }
 .btn-ghost:hover { color: var(--text-hi); border-color: var(--border-2); background: var(--surface-2); }
+.btn-ghost.active { color: var(--accent) !important; background: var(--accent-glow) !important; font-weight: 700; }
 .btn-accent   { background: var(--accent-glow); color: var(--accent); border-color: var(--accent-dim); }
 .btn-accent:hover { background: rgba(108,139,239,.3); }
 .btn-danger   { background: rgba(248,81,73,.12); color: var(--red); border-color: var(--red); }
@@ -223,14 +225,15 @@ input::placeholder, textarea::placeholder { color: var(--text-lo); }
 .upload-area {
   border: 2px dashed var(--border);
   border-radius: var(--r-lg);
-  padding: 2rem;
+  padding: 2.5rem;
   text-align: center;
   color: var(--text-md);
   cursor: pointer;
-  transition: border-color .2s;
-  font-size: .88rem;
+  transition: border-color .2s, background .2s;
+  font-size: .95rem;
+  background: var(--surface);
 }
-.upload-area:hover { border-color: var(--accent-dim); }
+.upload-area:hover { border-color: var(--accent); background: var(--surface-2); }
 .upload-area input[type="file"] { margin-top: 1rem; }
 
 .form-actions { margin-top: .5rem; }
