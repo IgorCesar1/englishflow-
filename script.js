@@ -1,10 +1,9 @@
 /**
- * EnglishFlow — script.js (Corrigido)
+ * EnglishFlow — script.js (Corrigido Definitivamente)
  */
 
 'use strict';
 
-// Força o carregamento do worker auxiliar do PDF.js de forma interna estável
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
 const DB = (() => {
@@ -111,12 +110,12 @@ const CreateModule = (() => {
   let pdfLines = [];
   return {
     init: () => {
-      // Monitora os botões de rádio para trocar as telas de PDF e Colar na hora!
+      // Alternância de abas sem chance de travar
       document.querySelectorAll('input[name="inputMode"]').forEach(r => {
         r.addEventListener('change', (e) => {
           const isPdf = e.target.value === 'pdf';
-          document.getElementById('pdfDropZone').classList.toggle('hidden', !isPdf);
-          document.getElementById('textInputArea').classList.toggle('hidden', isPdf);
+          document.getElementById('pdfDropZone').style.display = isPdf ? 'block' : 'none';
+          document.getElementById('textInputArea').style.display = isPdf ? 'none' : 'flex';
         });
       });
 
@@ -137,22 +136,23 @@ const CreateModule = (() => {
           for (let i = 0; i < raw.length; i += 2) {
             if (raw[i]) pdfLines.push({ en: raw[i] + ".", pt: raw[i+1] ? raw[i+1] + "." : "Tradução pendente" });
           }
-          UIUtils.toast("PDF alinhado com sucesso!", "success");
+          UIUtils.toast("PDF mapeado com sucesso!", "success");
           document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
         } catch { UIUtils.toast("Erro ao ler o arquivo PDF.", "error"); }
       };
 
       document.getElementById('btnCreateModule').onclick = () => {
         const title = document.getElementById('moduleTitle').value.trim();
-        if(!title) { UIUtils.toast("Digite um título.", "error"); return; }
+        if(!title) { UIUtils.toast("Digite o título da história.", "error"); return; }
         const mode = document.querySelector('input[name="inputMode"]:checked').value;
         let finalLines = [];
 
         if(mode === 'text') {
           const enArr = document.getElementById('rawEnglishText').value.split('\n').map(x => x.trim()).filter(x => x.length > 0);
-          const ptArr = document.getElementById('rawPortugueseTextText' ? document.getElementById('rawPortugueseText').value.split('\n').map(x => x.trim()) : []);
-          if(!enArr.length) { UIUtils.toast("Cole o texto em inglês.", "error"); return; }
-          finalLines = enArr.map((en, i) => ({ en, pt: ptArr[i] || "Tradução pendente" }));
+          const ptArr = document.getElementById('rawPortugueseText').value.split('\n').map(x => x.trim()).filter(x => x.length > 0);
+          
+          if(!enArr.length) { UIUtils.toast("Cole as frases em inglês.", "error"); return; }
+          finalLines = enArr.map((en, i) => ({ en, pt: ptArr[i] || "Tradução não inserida" }));
         } else {
           if(!pdfLines.length) { UIUtils.toast("Faça o upload do PDF primeiro.", "error"); return; }
           finalLines = [...pdfLines];
@@ -164,10 +164,10 @@ const CreateModule = (() => {
 
         document.getElementById('createForm').reset();
         pdfLines = [];
-        document.getElementById('textInputArea').classList.add('hidden');
-        document.getElementById('pdfDropZone').classList.remove('hidden');
+        document.getElementById('textInputArea').style.display = 'none';
+        document.getElementById('pdfDropZone').style.display = 'block';
         
-        UIUtils.toast("Módulo criado com sucesso!", "success");
+        UIUtils.toast("História criada!", "success");
         CreateModule.renderModuleList(); updateHeaderStats();
       };
 
@@ -177,18 +177,18 @@ const CreateModule = (() => {
         if(!en || !pt) return;
         const cards = DB.getCards(); cards.push({ id: UIUtils.uuid(), english: en, portuguese: pt, srs: SM2.newCard() });
         DB.saveCards(cards); document.getElementById('anki-form').reset();
-        UIUtils.toast("Card adicionado!", "success"); updateHeaderStats();
+        UIUtils.toast("Card avulso criado!", "success"); updateHeaderStats();
       };
       CreateModule.renderModuleList();
     },
     renderModuleList: () => {
       const mods = DB.getModules(); const el = document.getElementById('modulesList');
       document.getElementById('moduleCount').textContent = mods.length;
-      if(!mods.length) { el.innerHTML = '<p class="empty-state">Nenhum módulo criado.</p>'; return; }
+      if(!mods.length) { el.innerHTML = '<p class="empty-state">Nenhuma lição configurada.</p>'; return; }
       el.innerHTML = mods.map(m => `
         <div class="module-card">
           <div class="mc-title">${m.title}</div>
-          <div class="mc-meta">${m.sentences.length} frases</div>
+          <div class="mc-meta">${m.sentences.length} frases estruturadas</div>
           <div class="mc-actions" style="margin-top: .5rem;">
             <button class="btn btn-accent btn-sm" onclick="StudyModule.open('${m.id}'); TabManager.switchTab('study')">▶ Estudar</button>
             <button class="btn btn-ghost btn-sm" onclick="CreateModule.delete('${m.id}')">🗑</button>
@@ -222,7 +222,7 @@ const StudyModule = (() => {
       document.getElementById('btnStopAll').onclick = () => TTS.stop();
       document.getElementById('btnAddToPlaylistComplete').onclick = () => {
         curMod.sentences.forEach(s => PlaylistModule.addItem(s));
-        UIUtils.toast("História enviada para a playlist!", "success");
+        UIUtils.toast("Enviado para a playlist!", "success");
       };
     },
     refresh: () => {
@@ -251,7 +251,7 @@ const StudyModule = (() => {
       document.getElementById('studyProgress').style.width = "100%";
     },
     addSRS: (sid) => {
-      UIUtils.toast("Card gerado com sucesso!", "success");
+      UIUtils.toast("Card enviado para a revisão diária!", "success");
       const mods = DB.getModules(); const m = mods.find(x => x.id === curMod.id);
       const s = m.sentences.find(x => x.id === sid); s.srs.nextReview = new Date().toISOString().slice(0, 10);
       DB.saveModules(mods); updateHeaderStats();
@@ -284,7 +284,7 @@ const ReviewModule = (() => {
       document.getElementById('reviewEmpty').classList.add('hidden');
       document.getElementById('reviewDone').classList.add('hidden');
       if(!queue.length) { document.getElementById('reviewArea').classList.add('hidden'); document.getElementById('reviewEmpty').classList.remove('hidden'); document.getElementById('reviewSubtitle').textContent = "0 cards"; return; }
-      document.getElementById('reviewSubtitle').textContent = `${queue.length} pendentes`;
+      document.getElementById('reviewSubtitle').textContent = `${queue.length} cards agendados`;
       document.getElementById('reviewArea').classList.remove('hidden');
       ReviewModule.show();
     },
@@ -338,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
   TabManager.init(); CreateModule.init(); StudyModule.init(); ReviewModule.init(); PlaylistModule.init();
   TTS.init(); updateHeaderStats();
   
-  // Script para configurações de limpar e exportar
   document.getElementById('btnExport').onclick = () => {
     const blob = new Blob([JSON.stringify(DB.exportAll())], { type: 'application/json' });
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'backup.json' }); a.click();
