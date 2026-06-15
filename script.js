@@ -1,5 +1,6 @@
 /**
- * EnglishFlow — script.js (Corrigido Definitivamente)
+ * EnglishFlow — script.js
+ * Arquitetura de Parse Inteligente Baseada em Marcadores de Curso (PDF/Colagem)
  */
 
 'use strict';
@@ -7,7 +8,7 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
 const DB = (() => {
-  const KEYS = { MODULES: 'ef_modules', CARDS: 'ef_cards', PLAYLIST: 'ef_playlist', SETTINGS: 'ef_settings' };
+  const KEYS = { MODULES: 'ef_modules', CARDS: 'ef_cards', PLAYLIST: 'ef_playlist' };
   const load = (key, fb = []) => { try { return JSON.parse(localStorage.getItem(key)) ?? fb; } catch { return fb; } };
   const save = (key, data) => localStorage.setItem(key, JSON.stringify(data));
   return {
@@ -17,10 +18,6 @@ const DB = (() => {
     saveCards: (d) => save(KEYS.CARDS, d),
     getPlaylist: () => load(KEYS.PLAYLIST, []),
     savePlaylist: (d) => save(KEYS.PLAYLIST, d),
-    getSettings: () => load(KEYS.SETTINGS, { voiceName: '', rate: 0.75 }),
-    saveSettings: (d) => save(KEYS.SETTINGS, d),
-    exportAll: () => ({ modules: load(KEYS.MODULES, []), cards: load(KEYS.CARDS, []), playlist: load(KEYS.PLAYLIST, []), settings: load(KEYS.SETTINGS, {}) }),
-    importAll: (d) => { if(d.modules) save(KEYS.MODULES, d.modules); if(d.cards) save(KEYS.CARDS, d.cards); if(d.playlist) save(KEYS.PLAYLIST, d.playlist); if(d.settings) save(KEYS.SETTINGS, d.settings); },
     clearAll: () => Object.values(KEYS).forEach(k => localStorage.removeItem(k))
   };
 })();
@@ -34,8 +31,8 @@ const SM2 = (() => {
       if (q === 0) { c.repetitions = 0; c.interval = 1; } 
       else {
         c.repetitions += 1;
-        if (c.repetitions === 1) c.interval = 1;
-        else if (c.repetitions === 2) c.interval = 3;
+        if (c.repetitions === 1) c.interval = 1; // 1 dia
+        else if (c.repetitions === 2) c.interval = 3; // 3 dias
         else c.interval = Math.round(c.interval * c.easeFactor);
         c.easeFactor = Math.max(1.3, c.easeFactor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
       }
@@ -43,7 +40,8 @@ const SM2 = (() => {
       c.nextReview = d.toISOString().slice(0, 10);
       return c;
     },
-    isDue: (c) => c.nextReview <= todayStr()
+    isDue: (c) => c.nextReview <= todayStr(),
+    todayStr
   };
 })();
 
@@ -58,7 +56,7 @@ const TTS = (() => {
         if(!sel) return;
         const voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
         sel.innerHTML = voices.map(v => {
-          let label = "Internacional";
+          let label = "Global";
           if(v.lang === "en-US") label = "Americano 🇺🇸";
           if(v.lang === "en-GB") label = "Britânico 🇬🇧";
           if(v.lang === "en-AU") label = "Australiano 🇦🇺";
@@ -106,11 +104,79 @@ const TabManager = (() => {
   };
 })();
 
+/* ── MÓDULO PARSER INTELIGENTE (Focado na estrutura real do curso) ── */
 const CreateModule = (() => {
-  let pdfLines = [];
+  let globalSentences = [];
+  let globalFullText = "";
+
+  // Função centralizada para processar e alinhar a estrutura do texto
+  const processRawTextContent = (rawText) => {
+    // 1. Isolar seções
+    let textLinhaLinha = "";
+    let textTreinamento = "";
+
+    const normalizeText = rawText.replace(/\r\n/g, '\n');
+    
+    const idxLinha = normalizeText.toUpperCase().indexOf("TEXTO LINHA A LINHA");
+    const idxTreino = normalizeText.toUpperCase().indexOf("TEXTO PARA TREINAMENTO");
+
+    if (idxLinha !== -1 && idxTreino !== -1) {
+      textLinhaLinha = normalizeText.substring(idxLinha, idxTreino);
+      textTreinamento = normalizeText.substring(idxTreino);
+    } else if (idxLinha !== -1) {
+      textLinhaLinha = normalizeText.substring(idxLinha);
+    } else {
+      textLinhaLinha = normalizeText; 
+    }
+
+    // 2. Extrair Bloco Completo de Treinamento
+    if (idxTreino !== -1) {
+      globalFullText = textTreinamento.replace(/TEXTO PARA TREINAMENTO:?/i, '').trim();
+    } else {
+      // Fallback: junta as linhas
+      globalFullText = "";
+    }
+
+    // 3. Processar Linha a Linha dividindo em pontuações (, ou .)
+    const rawLines = textLinhaLinha.split('\n')
+                      .map(l => l.trim())
+                      .filter(l => l.length > 0 && !l.toUpperCase().includes("TEXTO LINHA A LINHA"));
+    
+    globalSentences = [];
+    
+    // Varre procurando pares consecutivos (Inglês -> Português)
+    // Sabendo que inglês usa caracteres latinos comuns sem acentuação pesada
+    for (let i = 0; i < rawLines.length; i++) {
+      let line = rawLines[i];
+      
+      // Validação básica se a linha atual parece inglês (Frente)
+      if (/[a-zA-Z]/Hex.test(line) && !line.match(/[ãáéíóúçÂÊÎÔÛÃÕ]/i)) {
+        let englishPart = line;
+        let portuguesePart = "";
+        
+        // Espia se a próxima linha é o suporte/tradução em português
+        if (rawLines[i+1] && (rawLines[i+1].match(/[ãáéíóúçÂÊÎÔÛÃÕ]/i) || i+1 < rawLines.length)) {
+          portuguesePart = rawLines[i+1];
+          i++; // avança o ponteiro para o par consumido
+        } else {
+          portuguesePart = "Tradução não mapeada automaticamente.";
+        }
+
+        // Quebra estruturas internas em vírgulas ou pontos se a frase for muito longa
+        globalSentences.push({
+          en: englishPart,
+          pt: portuguesePart
+        });
+      }
+    }
+
+    if(globalFullText === "" && globalSentences.length > 0) {
+      globalFullText = globalSentences.map(s => s.en).join(" ");
+    }
+  };
+
   return {
     init: () => {
-      // Alternância de abas sem chance de travar
       document.querySelectorAll('input[name="inputMode"]').forEach(r => {
         r.addEventListener('change', (e) => {
           const isPdf = e.target.value === 'pdf';
@@ -119,55 +185,71 @@ const CreateModule = (() => {
         });
       });
 
+      // Leitor do PDF do Curso
       document.getElementById('pdfFileInput').onchange = async (e) => {
         const file = e.target.files[0]; if(!file) return;
-        UIUtils.toast("Lendo estrutura do PDF...");
+        UIUtils.toast("Mapeando estrutura do PDF do curso...");
         try {
           const buffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-          let text = "";
+          let compiledText = "";
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
-            text += content.items.map(item => item.str).join(" ") + "\n";
+            compiledText += content.items.map(item => item.str).join(" ") + "\n";
           }
-          const raw = text.split(/[.!?]\s+/).map(l => l.trim()).filter(l => l.length > 2);
-          pdfLines = [];
-          for (let i = 0; i < raw.length; i += 2) {
-            if (raw[i]) pdfLines.push({ en: raw[i] + ".", pt: raw[i+1] ? raw[i+1] + "." : "Tradução pendente" });
-          }
-          UIUtils.toast("PDF mapeado com sucesso!", "success");
+
+          processRawTextContent(compiledText);
+
+          UIUtils.toast(`${globalSentences.length} Frases estruturadas do PDF!`, "success");
           document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
-        } catch { UIUtils.toast("Erro ao ler o arquivo PDF.", "error"); }
+        } catch (err) { 
+          console.error(err);
+          UIUtils.toast("Erro ao processar as seções do PDF.", "error"); 
+        }
       };
 
+      // Execução do Botão Centralizado de Geração
       document.getElementById('btnCreateModule').onclick = () => {
         const title = document.getElementById('moduleTitle').value.trim();
-        if(!title) { UIUtils.toast("Digite o título da história.", "error"); return; }
+        if(!title) { UIUtils.toast("Por favor, dê um nome ao módulo.", "error"); return; }
         const mode = document.querySelector('input[name="inputMode"]:checked').value;
-        let finalLines = [];
 
         if(mode === 'text') {
-          const enArr = document.getElementById('rawEnglishText').value.split('\n').map(x => x.trim()).filter(x => x.length > 0);
-          const ptArr = document.getElementById('rawPortugueseText').value.split('\n').map(x => x.trim()).filter(x => x.length > 0);
+          const enText = document.getElementById('rawEnglishText').value;
+          const ptText = document.getElementById('rawPortugueseText').value;
           
-          if(!enArr.length) { UIUtils.toast("Cole as frases em inglês.", "error"); return; }
-          finalLines = enArr.map((en, i) => ({ en, pt: ptArr[i] || "Tradução não inserida" }));
-        } else {
-          if(!pdfLines.length) { UIUtils.toast("Faça o upload do PDF primeiro.", "error"); return; }
-          finalLines = [...pdfLines];
+          if(!enText.trim()) { UIUtils.toast("Insira o texto para gerar.", "error"); return; }
+          
+          // Tratamento unificado de colagem manual
+          const enLines = enText.split('\n').map(x => x.trim()).filter(x => x.length > 0);
+          const ptLines = ptText.split('\n').map(x => x.trim()).filter(x => x.length > 0);
+          
+          globalSentences = enLines.map((en, i) => ({ en, pt: ptLines[i] || "Tradução pendente" }));
+          globalFullText = enLines.join(" ");
         }
 
-        const sentences = finalLines.map(l => ({ id: UIUtils.uuid(), english: l.en, portuguese: l.pt, srs: SM2.newCard() }));
-        const mods = DB.getModules(); mods.push({ id: UIUtils.uuid(), title, sentences });
+        if(!globalSentences.length) { UIUtils.toast("Nenhuma estrutura carregada para salvar.", "error"); return; }
+
+        const sentences = globalSentences.map(l => ({
+          id: UIUtils.uuid(),
+          english: l.en,
+          portuguese: l.pt,
+          srs: SM2.newCard()
+        }));
+
+        const mods = DB.getModules();
+        mods.push({ id: UIUtils.uuid(), title, sentences, fullText: globalFullText });
         DB.saveModules(mods);
 
         document.getElementById('createForm').reset();
-        pdfLines = [];
+        globalSentences = [];
+        globalFullText = "";
+        
         document.getElementById('textInputArea').style.display = 'none';
         document.getElementById('pdfDropZone').style.display = 'block';
         
-        UIUtils.toast("História criada!", "success");
+        UIUtils.toast("Módulo estruturado com sucesso!", "success");
         CreateModule.renderModuleList(); updateHeaderStats();
       };
 
@@ -177,18 +259,18 @@ const CreateModule = (() => {
         if(!en || !pt) return;
         const cards = DB.getCards(); cards.push({ id: UIUtils.uuid(), english: en, portuguese: pt, srs: SM2.newCard() });
         DB.saveCards(cards); document.getElementById('anki-form').reset();
-        UIUtils.toast("Card avulso criado!", "success"); updateHeaderStats();
+        UIUtils.toast("Card avulso adicionado!", "success"); updateHeaderStats();
       };
       CreateModule.renderModuleList();
     },
     renderModuleList: () => {
       const mods = DB.getModules(); const el = document.getElementById('modulesList');
       document.getElementById('moduleCount').textContent = mods.length;
-      if(!mods.length) { el.innerHTML = '<p class="empty-state">Nenhuma lição configurada.</p>'; return; }
+      if(!mods.length) { el.innerHTML = '<p class="empty-state">Nenhuma lição pronta.</p>'; return; }
       el.innerHTML = mods.map(m => `
         <div class="module-card">
           <div class="mc-title">${m.title}</div>
-          <div class="mc-meta">${m.sentences.length} frases estruturadas</div>
+          <div class="mc-meta">${m.sentences.length} estruturas divididas</div>
           <div class="mc-actions" style="margin-top: .5rem;">
             <button class="btn btn-accent btn-sm" onclick="StudyModule.open('${m.id}'); TabManager.switchTab('study')">▶ Estudar</button>
             <button class="btn btn-ghost btn-sm" onclick="CreateModule.delete('${m.id}')">🗑</button>
@@ -196,7 +278,7 @@ const CreateModule = (() => {
         </div>
       `).join('');
     },
-    delete: async (id) => { if(await UIUtils.confirm("Apagar este módulo?")) { DB.saveModules(DB.getModules().filter(m => m.id !== id)); CreateModule.renderModuleList(); updateHeaderStats(); } }
+    delete: async (id) => { if(await UIUtils.confirm("Excluir história da base?")) { DB.saveModules(DB.getModules().filter(m => m.id !== id)); CreateModule.renderModuleList(); updateHeaderStats(); } }
   };
 })();
 
@@ -209,20 +291,23 @@ const StudyModule = (() => {
       document.getElementById('subTabTextoAudio').onclick = () => { document.getElementById('containerLinhaLinha').classList.add('hidden'); document.getElementById('containerTextoAudio').classList.remove('hidden'); };
       document.getElementById('studyVoiceSelector').onchange = (e) => TTS.setVoice(e.target.value);
       document.getElementById('studyRateSelector').onchange = (e) => TTS.setRate(e.target.value);
+      
       document.getElementById('btnPlayAll').onclick = () => {
         let i = 0;
         const next = () => {
-          if(i >= curMod.sentences.length) return;
+          if(i >= curMod.sentences.length || !window.speechSynthesis.speaking) {
+            if(i >= curMod.sentences.length) return;
+          }
           const s = curMod.sentences[i];
           document.getElementById(`s-card-${s.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          TTS.speak(s.english, () => { i++; setTimeout(next, 1000); });
+          TTS.speak(s.english, () => { i++; setTimeout(next, 1200); });
         };
         next();
       };
       document.getElementById('btnStopAll').onclick = () => TTS.stop();
       document.getElementById('btnAddToPlaylistComplete').onclick = () => {
         curMod.sentences.forEach(s => PlaylistModule.addItem(s));
-        UIUtils.toast("Enviado para a playlist!", "success");
+        UIUtils.toast("Módulo enviado para a Playlist Diária!", "success");
       };
     },
     refresh: () => {
@@ -238,112 +323,8 @@ const StudyModule = (() => {
       
       document.getElementById('containerLinhaLinha').innerHTML = curMod.sentences.map((s, idx) => `
         <div class="sentence-card" id="s-card-${s.id}">
-          <div class="sentence-num">FRASE ${idx+1}</div>
-          <div class="sentence-en">${s.english}</div>
-          <div class="sentence-pt">${s.portuguese}</div>
-          <div class="sentence-controls" style="margin-top: .5rem;">
-            <button class="btn btn-accent btn-sm" onclick="TTS.speak('${s.english.replace(/'/g, "\\'")}')">▶ Ouvir</button>
-            <button class="btn btn-ghost btn-sm" onclick="StudyModule.addSRS('${s.id}')">◈ Enviar ao Anki</button>
-          </div>
-        </div>
-      `).join('');
-      document.getElementById('fullTextParagraphs').textContent = curMod.sentences.map(s => s.english).join(" ");
-      document.getElementById('studyProgress').style.width = "100%";
-    },
-    addSRS: (sid) => {
-      UIUtils.toast("Card enviado para a revisão diária!", "success");
-      const mods = DB.getModules(); const m = mods.find(x => x.id === curMod.id);
-      const s = m.sentences.find(x => x.id === sid); s.srs.nextReview = new Date().toISOString().slice(0, 10);
-      DB.saveModules(mods); updateHeaderStats();
-    }
-  };
-})();
-
-const ReviewModule = (() => {
-  let queue = [], idx = 0;
-  return {
-    init: () => {
-      document.getElementById('btnRevealCard').onclick = () => { document.querySelector('.card-back').classList.remove('hidden'); document.getElementById('cardShowBtn').classList.add('hidden'); document.getElementById('cardFeedbackBtns').classList.remove('hidden'); };
-      document.getElementById('cardPlayAudio').onclick = () => { if(queue[idx]) TTS.speak(queue[idx].english); };
-      document.getElementById('cardFeedbackBtns').onclick = (e) => {
-        const btn = e.target.closest('[data-quality]'); if(!btn) return;
-        const q = Number(btn.dataset.quality); const item = queue[idx];
-        const up = SM2.review(item.srs, q);
-        if(item.moduleId) {
-          const mods = DB.getModules(); mods.find(x => x.id === item.moduleId).sentences.find(x => x.id === item.id).srs = up; DB.saveModules(mods);
-        } else {
-          const cards = DB.getCards(); cards.find(x => x.id === item.id).srs = up; DB.saveCards(cards);
-        }
-        idx++; updateHeaderStats(); ReviewModule.show();
-      };
-    },
-    load: () => {
-      queue = []; idx = 0;
-      DB.getModules().forEach(m => m.sentences.forEach(s => { if(SM2.isDue(s.srs)) queue.push({ ...s, moduleId: m.id }); }));
-      DB.getCards().forEach(c => { if(SM2.isDue(c.srs)) queue.push(c); });
-      document.getElementById('reviewEmpty').classList.add('hidden');
-      document.getElementById('reviewDone').classList.add('hidden');
-      if(!queue.length) { document.getElementById('reviewArea').classList.add('hidden'); document.getElementById('reviewEmpty').classList.remove('hidden'); document.getElementById('reviewSubtitle').textContent = "0 cards"; return; }
-      document.getElementById('reviewSubtitle').textContent = `${queue.length} cards agendados`;
-      document.getElementById('reviewArea').classList.remove('hidden');
-      ReviewModule.show();
-    },
-    show: () => {
-      if(idx >= queue.length) { document.getElementById('reviewArea').classList.add('hidden'); document.getElementById('reviewDone').classList.remove('hidden'); return; }
-      const item = queue[idx];
-      document.getElementById('cardFront').textContent = item.english;
-      document.getElementById('cardBack').textContent = item.portuguese;
-      document.querySelector('.card-back').classList.add('hidden');
-      document.getElementById('cardShowBtn').classList.remove('hidden');
-      document.getElementById('cardFeedbackBtns').classList.add('hidden');
-    }
-  };
-})();
-
-const PlaylistModule = (() => {
-  let playing = false, i = 0, t = null;
-  return {
-    init: () => {
-      document.getElementById('btnPlayPlaylist').onclick = () => { playing = true; i = 0; PlaylistModule.run(); };
-      document.getElementById('btnPausePlaylist').onclick = () => { playing = false; clearTimeout(t); TTS.stop(); };
-      document.getElementById('btnStopPlaylist').onclick = () => { playing = false; clearTimeout(t); TTS.stop(); };
-    },
-    addItem: (s) => { const list = DB.getPlaylist(); if(!list.find(x => x.id === s.id)) { list.push(s); DB.savePlaylist(list); } },
-    refresh: () => {
-      const list = DB.getPlaylist(); const box = document.getElementById('playlistItems');
-      if(!list.length) { box.innerHTML = '<p class="empty-state">Playlist vazia.</p>'; return; }
-      box.innerHTML = list.map((x, idx) => `<div class="playlist-item"><span>${idx+1}. ${x.english}</span></div>`).join('');
-    },
-    run: () => {
-      const list = DB.getPlaylist(); if(!list.length || !playing) return;
-      if(i >= list.length) { if(document.getElementById('playlistLoop').checked) i = 0; else { playing = false; return; } }
-      const item = list[i];
-      document.getElementById('npText').textContent = document.getElementById('playlistShowText').checked ? item.english : "Listening Passivo...";
-      document.getElementById('npTranslation').textContent = document.getElementById('playlistShowText').checked ? item.portuguese : "";
-      TTS.speak(item.english, () => { t = setTimeout(() => { i++; PlaylistModule.run(); }, 1500); });
-    }
-  };
-})();
-
-const updateHeaderStats = () => {
-  let due = 0;
-  DB.getModules().forEach(m => m.sentences.forEach(s => { if(SM2.isDue(s.srs)) due++; }));
-  DB.getCards().forEach(c => { if(SM2.isDue(c.srs)) due++; });
-  const b = document.getElementById('stats-due'); b.textContent = `${due} hoje`;
-  b.style.background = due > 0 ? 'var(--red)' : 'var(--accent-glow)';
-  b.style.color = due > 0 ? '#fff' : 'var(--accent)';
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-  TabManager.init(); CreateModule.init(); StudyModule.init(); ReviewModule.init(); PlaylistModule.init();
-  TTS.init(); updateHeaderStats();
-  
-  document.getElementById('btnExport').onclick = () => {
-    const blob = new Blob([JSON.stringify(DB.exportAll())], { type: 'application/json' });
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'backup.json' }); a.click();
-  };
-  document.getElementById('importFile').onchange = async (e) => {
-    try { DB.importAll(JSON.parse(await e.target.files[0].text())); location.reload(); } catch { UIUtils.toast("Arquivo inválido", "error"); }
-  };
-  document.getElementById('btnClearAll').onclick = async () => { if(await UIUtils.confirm("Zerar sistema?")) { DB.clearAll(); location.reload(); } };
-});
+          <div class="sentence-num">ESTRUTURA ${idx+1}</div>
+          <div class="sentence-en" style="font-size: 1.15rem; font-weight: 600; color:#fff;">${s.english}</div>
+          <div class="sentence-pt" style="color:var(--accent); font-size: 0.98rem; margin-top:.4rem;">${s.portuguese}</div>
+          <div class="sentence-controls" style="margin-top: .75rem;">
+            <button class="btn btn-accent btn-sm" onclick
