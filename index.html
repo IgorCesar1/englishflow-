@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EnglishFlow — Input Compreensível + SRS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       HEADER / NAV
+  ═══════════════════════════════════════════════ -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-icon">⟡</span>
+      <span class="brand-name">EnglishFlow</span>
+    </div>
+    <nav class="tab-nav" role="tablist" aria-label="Módulos do sistema">
+      <button class="tab-btn active" data-tab="create"     role="tab" aria-selected="true"  aria-controls="tab-create">     ✦ Criar</button>
+      <button class="tab-btn"        data-tab="study"      role="tab" aria-selected="false" aria-controls="tab-study">      ▶ Estudar</button>
+      <button class="tab-btn"        data-tab="review"     role="tab" aria-selected="false" aria-controls="tab-review">     ◈ Revisão</button>
+      <button class="tab-btn"        data-tab="playlist"   role="tab" aria-selected="false" aria-controls="tab-playlist">   ♫ Playlist</button>
+      <button class="tab-btn"        data-tab="settings"   role="tab" aria-selected="false" aria-controls="tab-settings">   ⚙ Config</button>
+    </nav>
+    <div class="header-stats">
+      <span id="stats-due" class="stat-badge" title="Cards para revisar hoje">0 hoje</span>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 1: CRIAR
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-create" class="tab-panel active" role="tabpanel">
+      <div class="panel-header">
+        <h2>Adicionar Módulo / História</h2>
+        <p class="panel-sub">Cole o texto em inglês e sua tradução. O sistema fragmenta automaticamente em frases.</p>
+      </div>
+
+      <form class="create-form" id="createForm" onsubmit="return false;">
+        <div class="form-group">
+          <label for="moduleTitle">Título do Módulo</label>
+          <input type="text" id="moduleTitle" placeholder="Ex: Lesson 1 — The Forest Path" autocomplete="off" />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="englishText">Texto em Inglês</label>
+            <textarea id="englishText" rows="10" placeholder="Cole o texto em inglês aqui.&#10;Uma frase por linha ou separado por ponto final."></textarea>
+          </div>
+          <div class="form-group flex-1">
+            <label for="portugueseText">Tradução (Português)</label>
+            <textarea id="portugueseText" rows="10" placeholder="Cole a tradução correspondente aqui.&#10;Mesma quantidade de linhas do inglês."></textarea>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Áudio (opcional)</label>
+          <div class="audio-options">
+            <label class="radio-card">
+              <input type="radio" name="audioMode" value="tts" checked />
+              <span class="radio-icon">🔊</span>
+              <span>Usar voz do navegador (TTS gratuito)</span>
+            </label>
+            <label class="radio-card">
+              <input type="radio" name="audioMode" value="upload" />
+              <span class="radio-icon">📁</span>
+              <span>Upload de arquivos MP3</span>
+            </label>
+          </div>
+          <div id="uploadArea" class="upload-area hidden">
+            <p>Arraste arquivos MP3 ou clique para selecionar.<br/>
+               <small>Nomeie os arquivos com o número da frase: 01.mp3, 02.mp3…</small>
+            </p>
+            <input type="file" id="audioFiles" multiple accept="audio/*" />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="btnCreateModule">✦ Criar Módulo</button>
+        </div>
+      </form>
+
+      <!-- Lista de módulos existentes -->
+      <div class="modules-list-section">
+        <h3>Módulos Criados <span id="moduleCount" class="count-badge">0</span></h3>
+        <div id="modulesList" class="modules-grid"></div>
+      </div>
+
+      <!-- Formulário de Card Avulso (tipo Anki) -->
+      <div class="anki-section">
+        <h3>✦ Adicionar Card Avulso ao SRS</h3>
+        <p class="panel-sub">Adicione palavras ou frases diretamente à fila de repetição, sem criar um módulo.</p>
+        <form id="anki-form" class="anki-form" onsubmit="return false;">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="ankiEnglish">Frente (Inglês)</label>
+              <input type="text" id="ankiEnglish" placeholder="Ex: to overcome" />
+            </div>
+            <div class="form-group flex-1">
+              <label for="ankiPortuguese">Verso (Tradução)</label>
+              <input type="text" id="ankiPortuguese" placeholder="Ex: superar" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="ankiContext">Frase de contexto (opcional)</label>
+            <input type="text" id="ankiContext" placeholder="Ex: She managed to overcome her fears." />
+          </div>
+          <button type="submit" class="btn btn-secondary" id="btnAddAnki">+ Adicionar ao SRS</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 2: ESTUDAR
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-study" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Estudar</h2>
+        <p class="panel-sub">Selecione um módulo para iniciar.</p>
+      </div>
+
+      <div id="studyModuleSelector" class="study-selector">
+        <div id="studyModuleList" class="modules-grid compact"></div>
+        <p id="noModulesMsg" class="empty-state hidden">Nenhum módulo criado ainda. Vá para <strong>Criar</strong> e adicione o primeiro.</p>
+      </div>
+
+      <!-- Área de estudo principal -->
+      <div id="studyArea" class="study-area hidden">
+        <div class="study-header">
+          <button class="btn btn-ghost btn-sm" id="btnBackToModules">← Voltar</button>
+          <h3 id="studyTitle" class="study-title"></h3>
+          <div class="study-global-controls">
+            <select id="playbackMode" class="select-control">
+              <option value="dual">🇧🇷 Inglês + Tradução</option>
+              <option value="english">🇺🇸 Só inglês</option>
+              <option value="audio">🎧 Só áudio</option>
+            </select>
+            <button class="btn btn-accent" id="btnPlayAll">▶ Tocar Tudo</button>
+            <button class="btn btn-ghost btn-sm" id="btnStopAll">■ Parar</button>
+          </div>
+        </div>
+
+        <div class="progress-bar-wrap">
+          <div id="studyProgress" class="progress-bar"></div>
+        </div>
+
+        <div id="sentencesList" class="sentences-list"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 3: REVISÃO DIÁRIA (SRS)
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-review" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Revisão Diária</h2>
+        <p class="panel-sub" id="reviewSubtitle">Carregando cards…</p>
+      </div>
+
+      <!-- Card flip review -->
+      <div id="reviewArea" class="review-area">
+        <div id="reviewCard" class="srs-card">
+          <div class="card-front">
+            <div class="card-tag">inglês</div>
+            <p id="cardFront" class="card-text"></p>
+            <button class="btn btn-ghost card-audio-btn" id="cardPlayAudio">🔊 Ouvir</button>
+          </div>
+          <div class="card-back hidden">
+            <div class="card-tag">tradução</div>
+            <p id="cardBack" class="card-translation"></p>
+            <p id="cardContext" class="card-context"></p>
+          </div>
+        </div>
+
+        <div id="cardShowBtn" class="card-actions-row">
+          <button class="btn btn-primary" id="btnRevealCard">Mostrar Tradução</button>
+        </div>
+
+        <div id="cardFeedbackBtns" class="card-feedback hidden">
+          <span class="feedback-label">Como foi?</span>
+          <button class="btn btn-feedback btn-again"  data-quality="0">✗ Errei</button>
+          <button class="btn btn-feedback btn-hard"   data-quality="1">△ Difícil</button>
+          <button class="btn btn-feedback btn-good"   data-quality="3">○ Bom</button>
+          <button class="btn btn-feedback btn-easy"   data-quality="5">★ Fácil</button>
+        </div>
+      </div>
+
+      <div id="reviewDone" class="review-done hidden">
+        <div class="done-icon">✦</div>
+        <h3>Revisão concluída!</h3>
+        <p id="reviewDoneMsg"></p>
+        <button class="btn btn-secondary" id="btnGoPlaylist">♫ Ouvir Playlist de Revisão</button>
+      </div>
+
+      <div id="reviewEmpty" class="review-done hidden">
+        <div class="done-icon">◈</div>
+        <h3>Nenhum card para hoje</h3>
+        <p>Crie módulos ou adicione cards avulsos para começar a revisar.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 4: PLAYLIST
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-playlist" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Playlist de Listening Passivo</h2>
+        <p class="panel-sub">Todas as frases revisadas, tocando em sequência para treino passivo.</p>
+      </div>
+
+      <div class="playlist-controls">
+        <button class="btn btn-primary" id="btnPlayPlaylist">▶ Iniciar Playlist</button>
+        <button class="btn btn-ghost" id="btnPausePlaylist">⏸ Pausar</button>
+        <button class="btn btn-ghost" id="btnStopPlaylist">■ Parar</button>
+        <label class="toggle-label">
+          <input type="checkbox" id="playlistLoop" />
+          <span>Loop contínuo</span>
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="playlistShowText" checked />
+          <span>Mostrar texto</span>
+        </label>
+      </div>
+
+      <div class="playlist-player">
+        <div class="now-playing" id="nowPlaying">
+          <div class="np-label">Tocando agora</div>
+          <p id="npText" class="np-text">—</p>
+          <p id="npTranslation" class="np-translation">—</p>
+          <div class="np-progress">
+            <div id="npProgressBar" class="np-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="playlistItems" class="playlist-items"></div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 5: CONFIGURAÇÕES / BACKUP
+    ═══════════════════════════════════════════════ -->
+    <section id="tab-settings" class="tab-panel" role="tabpanel">
+      <div class="panel-header">
+        <h2>Configurações e Backup</h2>
+        <p class="panel-sub">Gerencie seus dados e preferências.</p>
+      </div>
+
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h3>💾 Backup de Dados</h3>
+          <p>Exporte todos os seus módulos, cards e progresso SRS em um arquivo JSON. Importe para restaurar.</p>
+          <div class="settings-actions">
+            <button class="btn btn-primary" id="btnExport">⬇ Exportar Backup</button>
+            <label class="btn btn-secondary btn-file-label" for="importFile">⬆ Importar Backup</label>
+            <input type="file" id="importFile" accept=".json" class="hidden" />
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>🔊 Voz TTS</h3>
+          <p>Selecione a voz em inglês que será usada no Text-to-Speech.</p>
+          <select id="voiceSelector" class="select-control"></select>
+          <div class="tts-test">
+            <input type="text" id="ttsTestText" value="Hello! This is a test of the text-to-speech voice." />
+            <button class="btn btn-ghost btn-sm" id="btnTestVoice">▶ Testar</button>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>⚡ Estatísticas</h3>
+          <div id="statsDisplay" class="stats-display"></div>
+        </div>
+
+        <div class="settings-card danger-zone">
+          <h3>⚠ Zona de Perigo</h3>
+          <p>Apaga permanentemente todos os dados do aplicativo.</p>
+          <button class="btn btn-danger" id="btnClearAll">🗑 Limpar Tudo</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast notifications -->
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- Confirmation modal -->
+  <div id="confirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <p id="confirmMsg" class="modal-msg"></p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="confirmCancel">Cancelar</button>
+        <button class="btn btn-danger" id="confirmOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
