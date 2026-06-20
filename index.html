@@ -3,290 +3,258 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EnglishFlow — Input Compreensível + SRS</title>
+  <title>EnglishFlow — PWA Premium</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Importação oficial do leitor de PDF.js -->
+  <!-- Engine de leitura de PDF nativa -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
 <body>
 
   <!-- ═══════════════════════════════════════════════
-       HEADER / NAV
+       HEADER COM NOTIFICAÇÃO DE REVISÃO ATIVA
   ═══════════════════════════════════════════════ -->
   <header class="app-header">
     <div class="brand">
       <span class="brand-icon">⟡</span>
       <span class="brand-name">EnglishFlow</span>
     </div>
-    <nav class="tab-nav" role="tablist" aria-label="Módulos do sistema">
-      <button class="tab-btn active" data-tab="create"     role="tab" aria-selected="true"  aria-controls="tab-create">     ✦ Criar</button>
-      <button class="tab-btn"        data-tab="study"      role="tab" aria-selected="false" aria-controls="tab-study">      ▶ Estudar</button>
-      <button class="tab-btn"        data-tab="review"     role="tab" aria-selected="false" aria-controls="tab-review">     ◈ Revisão</button>
-      <button class="tab-btn"        data-tab="playlist"   role="tab" aria-selected="false" aria-controls="tab-playlist">   ♫ Playlist</button>
-      <button class="tab-btn"        data-tab="settings"   role="tab" aria-selected="false" aria-controls="tab-settings">   ⚙ Config</button>
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" data-tab="create">✦ Importar</button>
+      <button class="tab-btn"        data-tab="study">▶ Estudar</button>
+      <button class="tab-btn"        data-tab="decks">🗂 Baralhos</button>
+      <button class="tab-btn"        data-tab="review">◈ Revisão <span id="review-badge" class="badge-alert hidden">0</span></button>
+      <button class="tab-btn"        data-tab="playlist">♫ Playlist</button>
+      <button class="tab-btn"        data-tab="config">⚙ Config</button>
     </nav>
-    <div class="header-stats">
-      <span id="stats-due" class="stat-badge" title="Cards para revisar hoje">0 hoje</span>
-    </div>
   </header>
 
   <main class="app-main">
 
-    <!-- ═══════════════════════════════════════════════
-         TAB 1: CRIAR (Entrada de Dados do Curso)
-    ═══════════════════════════════════════════════ -->
-    <section id="tab-create" class="tab-panel active" role="tabpanel">
+    <!-- ── TAB 1: IMPORTAÇÃO E MONTAGEM ── -->
+    <section id="tab-create" class="tab-panel active">
       <div class="panel-header">
-        <h2>Adicionar Módulo / História</h2>
-        <p class="panel-sub">Configure as lições da sua filha usando o PDF estruturado do curso ou faça a colagem manual.</p>
+        <h2>Processador de Conteúdo</h2>
+        <p class="panel-sub">Suba o material estruturado para você e sua filha estudarem.</p>
       </div>
 
-      <form class="create-form" id="createForm" onsubmit="return false;">
+      <form class="create-form" id="mainCreateForm" onsubmit="return false;">
         <div class="form-group">
-          <label for="moduleTitle">Nome da História / Parte</label>
+          <label>Nome do Módulo / Lição</label>
           <input type="text" id="moduleTitle" placeholder="Ex: Jack Hannaford — Parte 01" autocomplete="off" />
         </div>
 
-        <!-- Seleção do Modo de Entrada -->
-        <div class="audio-options" style="margin-bottom: 1rem; margin-top: .5rem;">
-          <label class="radio-card">
-            <input type="radio" name="inputMode" value="pdf" checked />
-            <span class="radio-icon">📄</span>
-            <span>Importar por PDF</span>
-          </label>
-          <label class="radio-card">
-            <input type="radio" name="inputMode" value="text" />
-            <span class="radio-icon">✍</span>
-            <span>Apenas Colar Texto</span>
-          </label>
+        <div class="audio-options" style="margin: .5rem 0 1rem 0;">
+          <label class="radio-card"><input type="radio" name="importMode" value="pdf" checked /> 📄 Usar PDF do Curso</label>
+          <label class="radio-card"><input type="radio" name="importMode" value="text" /> ✍ Colar Texto Bruto</label>
         </div>
 
-        <!-- Área 1: Upload de PDF -->
         <div class="upload-area" id="pdfDropZone">
-          <p>Clique abaixo ou arrastar o <strong>PDF do curso</strong> para mapear as seções automaticamente</p>
-          <input type="file" id="pdfFileInput" accept=".pdf" style="margin-top: 1rem;" />
+          <p>Arraste ou clique para carregar o <strong>PDF da Lição</strong></p>
+          <input type="file" id="pdfFileInput" accept=".pdf" />
         </div>
 
-        <!-- Área 2: Colagem Manual Inteligente -->
         <div id="textInputArea" class="hidden" style="flex-direction: column; gap: 1rem;">
-          <div class="form-group">
-            <label for="rawEnglishText">Bloco Linha a Linha (Inglês)</label>
-            <textarea id="rawEnglishText" rows="4" placeholder="Cole aqui apenas as frases em inglês do Linha a Linha, uma por linha."></textarea>
-          </div>
-          <div class="form-group">
-            <label for="rawPortugueseText">Bloco Linha a Linha (Português)</label>
-            <textarea id="rawPortugueseText" rows="4" placeholder="Cole aqui as traduções correspondentes em português, uma por linha."></textarea>
-          </div>
-          <div class="form-group">
-            <label for="rawTrainingText">Texto Corrido para Treinamento (Opcional)</label>
-            <textarea id="rawTrainingText" rows="4" placeholder="Cole aqui o texto corrido completo em inglês (para a aba de escuta contínua)."></textarea>
-          </div>
+          <div class="form-group"><label>Linhas em Inglês</label><textarea id="rawTextEn" rows="3" placeholder="Uma frase por linha"></textarea></div>
+          <div class="form-group"><label>Linhas em Português</label><textarea id="rawTextPt" rows="3" placeholder="Uma tradução por linha"></textarea></div>
         </div>
 
-        <!-- Botão Único Global de Criação -->
-        <div class="form-actions" style="margin-top: 1.5rem;">
-          <button type="submit" class="btn btn-primary" id="btnCreateModule" style="width: 100%; justify-content: center; padding: .8rem; font-size: 1rem;">✦ Processar e Estruturar Módulo</button>
-        </div>
+        <button type="submit" class="btn btn-primary" id="btnProcessModule" style="width:100%; justify-content:center; margin-top:1rem;">✦ Estruturar e Compilar Módulo</button>
       </form>
 
-      <!-- Lista de Módulos Salvos -->
-      <div class="modules-list-section">
-        <h3>Histórias Prontas <span id="moduleCount" class="count-badge">0</span></h3>
-        <div id="modulesList" class="modules-grid"></div>
+      <!-- Lista de Módulos Processados -->
+      <div class="modules-list-section" style="margin-top:2.5rem;">
+        <h3>Módulos na Grade</h3>
+        <div id="compiledModulesGrid" class="modules-grid"></div>
+      </div>
+    </section>
+
+    <!-- ── TAB 2: PAINEL DE ESTUDO (LINHA A LINHA & TEXTO CONTÍNUO) ── -->
+    <section id="tab-study" class="tab-panel">
+      <div id="studySelectorView">
+        <div class="panel-header"><h2>Selecione uma Lição para Iniciar</h2></div>
+        <div id="studyAvailableGrid" class="modules-grid"></div>
       </div>
 
-      <!-- Caixa de Cards Avulsos -->
-      <div class="anki-section">
-        <h3>✦ Adicionar Termo Avulso ao SRS (Estilo Anki)</h3>
-        <form id="anki-form" class="anki-form" onsubmit="return false;">
+      <div id="studyActiveView" class="hidden">
+        <div class="study-nav-header">
+          <button class="btn btn-ghost btn-sm" id="btnLeaveStudy">← Voltar</button>
+          <h3 id="activeStudyTitle"></h3>
+        </div>
+
+        <!-- Seletores de Voz do Narrador Principal -->
+        <div class="voice-dashboard-panel">
+          <div style="flex:1; min-width:200px;">
+            <label class="mini-label">NARRADOR FLUXO</label>
+            <select id="studyVoicePicker" class="select-control"></select>
+          </div>
+          <div>
+            <label class="mini-label">CADÊNCIA</label>
+            <select id="studyRatePicker" class="select-control" style="width:120px;">
+              <option value="0.6">0.60x Lento</option>
+              <option value="0.75" selected>0.75x Didático</option>
+              <option value="0.9">0.90x Fluido</option>
+              <option value="1.0">1.00x Nativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="audio-options" style="margin: 1.5rem 0;">
+          <button class="btn btn-ghost flex-1 active" id="btnToggleLinha">Linha a linha</button>
+          <button class="btn btn-ghost flex-1" id="btnToggleTexto">Texto + áudio</button>
+        </div>
+
+        <!-- Renderizadores Dinâmicos -->
+        <div id="studyLinhaContainer"></div>
+        <div id="studyTextoContainer" class="hidden">
+          <div style="text-align:center; margin-bottom:1.5rem;">
+            <button class="btn btn-accent" id="btnPlayFullStory">▶ Tocar História Completa</button>
+            <button class="btn btn-secondary" id="btnStopFullStory">■ Parar</button>
+          </div>
+          <p id="blockFullTextParagraph" class="text-block-preview"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TAB 3: GESTÃO DE BARALHOS E INCLUSÃO AVULSA ── -->
+    <section id="tab-decks" class="tab-panel">
+      <div class="panel-header">
+        <h2>Gerenciador de Baralhos (Cards)</h2>
+        <p class="panel-sub">Crie baralhos independentes para organizar suas revisões.</p>
+      </div>
+
+      <div class="settings-grid" style="margin-bottom:2rem;">
+        <div class="settings-card">
+          <h3>+ Criar Baralho Customizado</h3>
+          <div style="display:flex; gap:.5rem; margin-top:.5rem;">
+            <input type="text" id="newDeckName" placeholder="Ex: Mineração - Filmes" />
+            <button class="btn btn-primary" id="btnCreateDeck">Criar</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="decksManagementContainer"></div>
+
+      <!-- Inclusão de Card Avulso Manual -->
+      <div class="anki-section" style="margin-top:2.5rem;">
+        <h3>✦ Adicionar Card Avulso Manual</h3>
+        <div class="create-form" style="margin-top:1rem;">
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="ankiEnglish">Frente (Expressão em Inglês)</label>
-              <input type="text" id="ankiEnglish" placeholder="Ex: sly like a fox" />
+              <label>Destino (Baralho)</label>
+              <select id="cardDeckDestiny" class="select-control"></select>
             </div>
             <div class="form-group flex-1">
-              <label for="ankiPortuguese">Verso (Significado)</label>
-              <input type="text" id="ankiPortuguese" placeholder="Ex: astuto como uma raposa" />
+              <label>Sotaque de Leitura deste Card</label>
+              <select id="cardVoiceDestiny" class="select-control"></select>
             </div>
           </div>
-          <button type="submit" class="btn btn-secondary" id="btnAddAnki">+ Gerar Card SRS</button>
-        </form>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 2: ESTUDAR (Linha a Linha & Texto + Áudio)
-    ═══════════════════════════════════════════════ -->
-    <section id="tab-study" class="tab-panel" role="tabpanel">
-      <div class="panel-header">
-        <h2>Painel de Treinamento por Input</h2>
-      </div>
-
-      <div id="studyModuleSelector" class="study-selector">
-        <div id="studyModuleList" class="modules-grid compact"></div>
-        <p id="noModulesMsg" class="empty-state hidden">Nenhuma história configurada. Vá na aba Criar.</p>
-      </div>
-
-      <div id="studyArea" class="study-area hidden">
-        <div class="study-header" style="flex-direction: column; align-items: stretch; gap: .5rem;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <button class="btn btn-ghost btn-sm" id="btnBackToModules">← Voltar para a Lista</button>
-            <h3 id="studyTitle" class="study-title" style="margin-left: 1rem;"></h3>
+          <div class="form-row">
+            <div class="form-group flex-1"><label>Frente (Inglês)</label><input type="text" id="manualCardEn" /></div>
+            <div class="form-group flex-1"><label>Verso (Português)</label><input type="text" id="manualCardPt" /></div>
           </div>
-          
-          <!-- Seletores de Configuração da Voz do Professor -->
-          <div style="background: var(--surface-2); padding: .75rem; border-radius: var(--r-md); margin-top: .5rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; border: 1px solid var(--border);">
-            <div style="flex: 1; min-width: 200px;">
-              <label style="font-size: 0.72rem; font-weight: bold; color: var(--text-md); display: block; margin-bottom: 2px;">CONFIGURAR NARRADOR / SOTAQUE</label>
-              <select id="studyVoiceSelector" class="select-control" style="padding: .4rem; font-size: .85rem; background: var(--surface);"></select>
-            </div>
-            <div>
-              <label style="font-size: 0.72rem; font-weight: bold; color: var(--text-md); display: block; margin-bottom: 2px;">VELOCIDADE DE LEITURA</label>
-              <select id="studyRateSelector" class="select-control" style="padding: .4rem; font-size: .85rem; width: 120px; background: var(--surface);">
-                <option value="0.55">0.55x (Super Lento)</option>
-                <option value="0.70">0.70x (Pausado)</option>
-                <option value="0.75" selected>0.75x (Cadência Ideal)</option>
-                <option value="0.90">0.90x (Quase Normal)</option>
-                <option value="1.00">1.00x (Nativo Fluido)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Alternador Estilo Menu Superior do Curso -->
-        <div class="audio-options" style="margin-bottom: 1.5rem; background: var(--surface); padding: .4rem; border-radius: var(--r-md); margin-top: 1rem; border: 1px solid var(--border);">
-          <button class="btn btn-ghost flex-1 active" id="subTabLinha" style="border: none;">Linha a linha</button>
-          <button class="btn btn-ghost flex-1" id="subTabTextoAudio" style="border: none;">Texto + áudio</button>
-        </div>
-
-        <div class="progress-bar-wrap">
-          <div id="studyProgress" class="progress-bar"></div>
-        </div>
-
-        <!-- Exibição 1: Lista Linha a Linha -->
-        <div id="containerLinhaLinha" class="sentences-list"></div>
-
-        <!-- Exibição 2: Bloco de Treinamento Contínuo -->
-        <div id="containerTextoAudio" class="hidden" style="background: var(--surface); padding: 1.5rem; border-radius: var(--r-lg); border: 1px solid var(--border);">
-          <div class="study-global-controls" style="margin-bottom: 1.5rem; background: var(--surface-2); padding: 1rem; border-radius: var(--r-md); justify-content: center; display: flex; gap: 1rem;">
-            <button class="btn btn-accent" id="btnPlayAll">▶ Tocar História Inteira</button>
-            <button class="btn btn-secondary" id="btnStopAll">■ Parar Narração</button>
-          </div>
-          <p id="fullTextParagraphs" style="font-size: 1.2rem; line-height: 1.9; color: var(--text-hi); text-align: justify; font-family: inherit;"></p>
-        </div>
-
-        <!-- Inserção Automática na Playlist -->
-        <div style="margin-top: 2rem; padding: 1.5rem; text-align: center; border-top: 1px solid var(--border);">
-          <button class="btn btn-accent" id="btnAddToPlaylistComplete">♫ Enviar Áudios para a Playlist Diária</button>
+          <button class="btn btn-secondary" id="btnSaveManualCard">+ Inserir Card no Baralho</button>
         </div>
       </div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════
-         TAB 3: REVISÃO DIÁRIA (SRS)
-    ═══════════════════════════════════════════════ -->
-    <section id="tab-review" class="tab-panel" role="tabpanel">
+    <!-- ── TAB 4: ENGINE DE REVISÃO (AN INTERFACE DO ANKI) ── -->
+    <section id="tab-review" class="tab-panel">
       <div class="panel-header">
-        <h2>Sessão de Revisão Ativa</h2>
-        <p class="panel-sub" id="reviewSubtitle">Verificando pendências...</p>
+        <h2>Sessão Espaçada Diária</h2>
+        <p class="panel-sub" id="reviewSessionSubtitle">0 cards pendentes</p>
       </div>
 
-      <div id="reviewArea" class="review-area">
-        <div id="reviewCard" class="srs-card">
+      <div id="reviewActiveContainer" class="review-area hidden">
+        <div class="srs-card">
           <div class="card-front">
-            <div class="card-tag">FRENTE (INGLÊS)</div>
-            <p id="cardFront" class="card-text"></p>
-            <button class="btn btn-ghost card-audio-btn" id="cardPlayAudio" style="margin-top: 1rem;">🔊 Escutar Pronúncia</button>
+            <div class="card-tag" id="reviewCardDeckLabel">BARALHO</div>
+            <p id="reviewTextFront" class="card-text"></p>
+            <button class="btn btn-ghost btn-sm" id="btnSpeakReviewFront" style="margin-top:1rem;">🔊 Ouvir</button>
           </div>
-          <div class="card-back hidden" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border);">
-            <div class="card-tag">VERSO (SIGNIFICADO)</div>
-            <p id="cardBack" class="card-translation"></p>
+          <div class="card-back hidden" id="reviewCardBackBlock" style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px dashed var(--border);">
+            <div class="card-tag">TRADUÇÃO</div>
+            <p id="reviewTextBack" class="card-translation"></p>
           </div>
         </div>
 
-        <div id="cardShowBtn" class="card-actions-row">
-          <button class="btn btn-primary" id="btnRevealCard" style="width: 100%; justify-content: center;">Mostrar Resposta</button>
+        <div id="reviewActionTriggerRow">
+          <button class="btn btn-primary" id="btnRevealReviewAnswer" style="width:100%; justify-content:center;">Mostrar Tradução</button>
         </div>
 
-        <div id="cardFeedbackBtns" class="card-feedback hidden">
-          <span class="feedback-label">Qual foi a facilidade de retenção?</span>
-          <button class="btn btn-feedback btn-again"  data-quality="0">✗ Errei</button>
-          <button class="btn btn-feedback btn-hard"   data-quality="1">△ Difícil</button>
-          <button class="btn btn-feedback btn-good"   data-quality="3">○ Bom</button>
-          <button class="btn btn-feedback btn-easy"   data-quality="5">★ Fácil</button>
+        <!-- Botões Oficiais do Padrão Anki -->
+        <div id="reviewFeedbackButtonRow" class="card-feedback hidden">
+          <button class="btn btn-feedback btn-again" data-q="0">✗ Errei</button>
+          <button class="btn btn-feedback btn-hard"  data-q="1">△ Difícil</button>
+          <button class="btn btn-feedback btn-good"  data-q="3">○ Bom</button>
+          <button class="btn btn-feedback btn-easy"  data-q="5">★ Fácil</button>
         </div>
       </div>
 
-      <div id="reviewEmpty" class="review-done hidden">
+      <div id="reviewEmptyState" class="review-done">
         <div class="done-icon">◈</div>
-        <h3>Tudo revisado!</h3>
-        <p>A meta de hoje para os cards de fixação foi cumprida de forma excelente.</p>
-      </div>
-      <div id="reviewDone" class="review-done hidden">
-        <div class="done-icon">✦</div>
-        <h3>Cards concluídos!</h3>
-        <p>Os tempos de agendamento foram salvos no algoritmo com sucesso.</p>
+        <h3>Nenhum card agendado para agora!</h3>
+        <p>Aproveite para ler novas histórias ou praticar o listening ativo.</p>
       </div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════
-         TAB 4: PLAYLIST DIÁRIA
-    ═══════════════════════════════════════════════ -->
-    <section id="tab-playlist" class="tab-panel" role="tabpanel">
+    <!-- ── TAB 5: PLAYLIST AUTOMÁTICA COM MONITOR DE TEMPO ── -->
+    <section id="tab-playlist" class="tab-panel">
       <div class="panel-header">
-        <h2>Fila de Reprodução Autônoma</h2>
-        <p class="panel-sub">Ouvir os blocos em sequência cíclica para ativação do listening.</p>
+        <h2>Fila de Listening Passivo</h2>
+        <p class="panel-sub" id="playlistDurationTrack">Tempo acumulado: 0 minutos</p>
       </div>
-      <div class="playlist-controls">
-        <button class="btn btn-primary" id="btnPlayPlaylist">▶ Iniciar Listening Contínuo</button>
-        <button class="btn btn-ghost" id="btnPausePlaylist">⏸ Pausar</button>
-        <button class="btn btn-ghost" id="btnStopPlaylist">■ Desligar</button>
-        <label class="toggle-label"><input type="checkbox" id="playlistLoop" checked /> <span>Loop Infinito</span></label>
-        <label class="toggle-label"><input type="checkbox" id="playlistShowText" checked /> <span>Exibir Texto Associado</span></label>
-      </div>
+
       <div class="playlist-player">
         <div class="now-playing">
-          <p id="npText" class="np-text">—</p>
-          <p id="npTranslation" class="np-translation">—</p>
-          <div class="np-progress"><div id="npProgressBar" class="np-bar"></div></div>
+          <p class="card-tag">REPRODUZINDO AGORA</p>
+          <p id="playlistCurrentTitle" class="np-text">—</p>
+          <p id="playlistCurrentSub" class="np-translation">—</p>
+          <div class="np-progress"><div id="playlistProgressIndicator" class="np-bar"></div></div>
+        </div>
+        <div class="playlist-controls" style="margin-top:1.5rem; justify-content:center;">
+          <button class="btn btn-ghost" id="playlistBtnPrev">⏮</button>
+          <button class="btn btn-primary" id="playlistBtnPlay">▶ Iniciar</button>
+          <button class="btn btn-ghost" id="playlistBtnNext">⏭</button>
+          <label style="margin-left:1rem; display:inline-flex; align-items:center; gap:.3rem; font-size:.85rem; color:var(--text-md);">
+            <input type="checkbox" id="playlistLoopToggle" checked /> Loop Fila
+          </label>
         </div>
       </div>
-      <div id="playlistItems" class="playlist-items"></div>
+
+      <div id="playlistTracksBox" class="playlist-items"></div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════
-         TAB 5: CONFIGURAÇÕES
-    ═══════════════════════════════════════════════ -->
-    <section id="tab-settings" class="tab-panel" role="tabpanel">
-      <div class="panel-header">
-        <h2>Central de Controle</h2>
-      </div>
+    <!-- ── TAB 6: CONFIGURAÇÕES E RESETS ── -->
+    <section id="tab-config" class="tab-panel">
+      <div class="panel-header"><h2>Configurações do App</h2></div>
       <div class="settings-grid">
         <div class="settings-card">
-          <h3>💾 Banco de Dados Local</h3>
-          <div class="settings-actions" style="margin-top: 1rem;">
-            <button class="btn btn-primary" id="btnExport">⬇ Salvar Cópia Externa</button>
-            <label class="btn btn-secondary" for="importFile" style="cursor:pointer;">⬆ Carregar Cópia Externa</label>
-            <input type="file" id="importFile" accept=".json" class="hidden" />
+          <h3>💾 Exportar/Importar Banco</h3>
+          <p>Faça backup do progresso seu e de sua filha em arquivo externo.</p>
+          <div class="settings-actions" style="margin-top:1rem;">
+            <button class="btn btn-primary" id="btnConfigExport">Exportar JSON</button>
+            <label class="btn btn-secondary" for="configImportFile" style="cursor:pointer;">Importar JSON</label>
+            <input type="file" id="configImportFile" accept=".json" class="hidden" />
           </div>
         </div>
         <div class="settings-card danger-zone">
-          <h3>⚠ Manutenção Crítica</h3>
-          <button class="btn btn-danger" id="btnClearAll" style="margin-top: 1rem; width: 100%; justify-content: center;">🗑 Resetar Todo o Progresso do Sistema</button>
+          <h3>⚠ Reset de Fábrica</h3>
+          <p>Apaga permanentemente todos os registros, baralhos e revisões salvos.</p>
+          <button class="btn btn-danger" id="btnConfigClearAll" style="margin-top:1rem; width:100%; justify-content:center;">Resetar EnglishFlow</button>
         </div>
       </div>
     </section>
 
   </main>
 
+  <!-- Modais Auxiliares Globais -->
   <div id="toast" class="toast"></div>
-
   <div id="confirmModal" class="modal-overlay hidden">
     <div class="modal">
-      <p id="confirmMsg" class="modal-msg"></p>
+      <p id="confirmModalMsg" class="modal-msg"></p>
       <div class="modal-actions">
-        <button class="btn btn-ghost" id="confirmCancel">Cancelar</button>
-        <button class="btn btn-danger" id="confirmOk">Confirmar</button>
+        <button class="btn btn-ghost" id="btnConfirmCancel">Cancelar</button>
+        <button class="btn btn-danger" id="btnConfirmOk">Confirmar</button>
       </div>
     </div>
   </div>
