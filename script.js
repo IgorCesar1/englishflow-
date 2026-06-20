@@ -1,5 +1,5 @@
 /**
- * EnglishFlow Engine — script.js (Revisado e Corrigido)
+ * EnglishFlow Engine — script.js (Engine de Leitura Forçada e UI Blindada)
  */
 
 'use strict';
@@ -136,7 +136,7 @@ const SRS = (() => {
   };
 })();
 
-// ── ENGINE DE NARRATIVAS DE SOTAQUES (NATIVE VOICES) ──
+// ── ENGINE DE VOZES ──
 const VoiceEngine = (() => {
   const synth = window.speechSynthesis;
   let activeVoiceName = '';
@@ -183,7 +183,7 @@ const VoiceEngine = (() => {
   };
 })();
 
-// ── GERENCIADOR DE INTERFACE E DE ABAS (UI) ──
+// ── GERENCIADOR DE UI ──
 const TabManager = (() => {
   const toast = document.getElementById('toast');
   const confirmModal = document.getElementById('confirmModal');
@@ -223,7 +223,7 @@ const TabManager = (() => {
   };
 })();
 
-// ── COMPILADOR DE PDF E TEXTO (ABA 1) ──
+// ── ABA 1: IMPORTAÇÃO BLINDADA ──
 const ImportPanel = (() => {
   let compiledSentences = [];
   let compiledTextBlock = "";
@@ -233,19 +233,26 @@ const ImportPanel = (() => {
     compiledTextBlock = "";
 
     const lines = fullText.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    let mode = "metadata";
+    
+    // Inicia diretamente no modo linha para não depender do título "TEXTO LINHA A LINHA"
+    let mode = "linha"; 
     let lastEnglish = "";
 
     for (let i = 0; i < lines.length; i++) {
       const uLine = lines[i].toUpperCase();
       
-      if (uLine.includes("TEXTO LINHA A LINHA") || uLine.includes("LINHA A LINHA")) { mode = "linha"; continue; }
-      if (uLine.includes("TEXTO PARA TREINAMENTO") || uLine.includes("PARA TREINAMENTO")) { mode = "treino"; continue; }
+      if (uLine.includes("TEXTO PARA TREINAMENTO") || uLine.includes("TEXTO COM ÁUDIO")) { 
+        mode = "treino"; 
+        continue; 
+      }
 
       if (mode === "linha") {
-        // Correção da Expressão Regular: validação livre de erros de sintaxe
+        // Ignora lixo de cabeçalho
+        if (uLine.includes("JACK HANNAFORD") || uLine.includes("PARTE") || uLine.includes("TEXTO LINHA")) continue;
+
+        // Validação leve de inglês (tem letras e não tem caracteres super brasileiros)
         if (/[a-zA-Z]/.test(lines[i]) && !lines[i].match(/[ãáéíóúçÂÊÎÔÛÃÕ]/i)) {
-          if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução oculta" });
+          if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente" });
           lastEnglish = lines[i];
         } else {
           if (lastEnglish) {
@@ -257,29 +264,38 @@ const ImportPanel = (() => {
         compiledTextBlock += lines[i] + " ";
       }
     }
-    if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução oculta" });
+    
+    if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente" });
     if (!compiledTextBlock && compiledSentences.length) compiledTextBlock = compiledSentences.map(s => s.en).join(" ");
+  };
+
+  const updateInputVisibility = () => {
+    const isPdf = document.querySelector('input[name="importMode"]:checked').value === 'pdf';
+    const pdfZone = document.getElementById('pdfDropZone');
+    const textArea = document.getElementById('textInputArea');
+    
+    // Força bruta via estilo inline para ignorar conflitos de CSS
+    if (isPdf) {
+      pdfZone.style.display = 'block';
+      textArea.style.display = 'none';
+    } else {
+      pdfZone.style.display = 'none';
+      textArea.style.display = 'flex';
+    }
   };
 
   return {
     init: () => {
-      document.querySelectorAll('input[name="importMode"]').forEach(radio => {
-        radio.onchange = (e) => {
-          const isPdf = e.target.value === 'pdf';
-          // Correção de exibição: removemos a classe .hidden para evitar conflito com !important
-          if (isPdf) {
-            document.getElementById('pdfDropZone').classList.remove('hidden');
-            document.getElementById('textInputArea').classList.add('hidden');
-          } else {
-            document.getElementById('pdfDropZone').classList.add('hidden');
-            document.getElementById('textInputArea').classList.remove('hidden');
-          }
-        };
-      });
+      // Monitora os botões de rádio e aplica a visibilidade correta
+      const radios = document.querySelectorAll('input[name="importMode"]');
+      radios.forEach(radio => radio.addEventListener('change', updateInputVisibility));
+      
+      // Executa uma vez no início para garantir a tela correta
+      updateInputVisibility();
 
-      document.getElementById('pdfFileInput').onchange = async (e) => {
+      document.getElementById('pdfFileInput').addEventListener('change', async (e) => {
         const file = e.target.files[0]; if (!file) return;
-        TabManager.showToast("Mapeando blocos estruturais do PDF...");
+        TabManager.showToast("Lendo PDF...");
         try {
           const buffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -290,10 +306,18 @@ const ImportPanel = (() => {
             extractedText += content.items.map(it => it.str).join(" ") + "\n";
           }
           parseRawBuffer(extractedText);
-          TabManager.showToast(`${compiledSentences.length} estruturas localizadas!`, 'success');
-          document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
-        } catch { TabManager.showToast("Erro ao decodificar arquivo PDF.", 'error'); }
-      };
+          TabManager.showToast(`${compiledSentences.length} frases mapeadas!`, 'success');
+          
+          if (!document.getElementById('moduleTitle').value) {
+            document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
+          }
+        } catch (err) {
+          console.error(err);
+          TabManager.showToast("Falha ao ler PDF.", 'error');
+        }
+        // Reseta o input para permitir subir o mesmo arquivo de novo caso precise testar
+        e.target.value = '';
+      });
 
       document.getElementById('btnProcessModule').onclick = () => {
         const title = document.getElementById('moduleTitle').value.trim();
@@ -304,18 +328,24 @@ const ImportPanel = (() => {
           const enLines = document.getElementById('rawTextEn').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
           const ptLines = document.getElementById('rawTextPt').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
           if (!enLines.length) return TabManager.showToast("Insira o bloco em inglês.", 'error');
+          
           compiledSentences = enLines.map((en, idx) => ({ en, pt: ptLines[idx] || "Tradução pendente" }));
           compiledTextBlock = enLines.join(" ");
         }
 
-        if (!compiledSentences.length) return TabManager.showToast("Nenhum dado estruturado pendente.", 'error');
+        if (!compiledSentences || !compiledSentences.length) {
+          return TabManager.showToast("Nenhum dado estruturado pendente.", 'error');
+        }
 
         const sentences = compiledSentences.map(s => ({ id: 's_' + Math.random().toString(36).substring(2,11), english: s.en, portuguese: s.pt }));
         DB.addModule({ id: 'mod_' + Math.random().toString(36).substring(2,11), title, sentences, fullText: compiledTextBlock });
         
         document.getElementById('mainCreateForm').reset();
-        compiledSentences = []; compiledTextBlock = "";
-        TabManager.showToast("Módulo compilado com sucesso!", 'success');
+        compiledSentences = []; 
+        compiledTextBlock = "";
+        updateInputVisibility();
+        
+        TabManager.showToast("Módulo criado com sucesso!", 'success');
         ImportPanel.renderGrid();
       };
 
@@ -328,23 +358,23 @@ const ImportPanel = (() => {
       box.innerHTML = mods.map(m => `
         <div class="module-card">
           <div class="mc-title">${m.title}</div>
-          <div class="mc-meta">${m.sentences.length} Chunks estruturados</div>
+          <div class="mc-meta">${m.sentences.length} estruturas</div>
           <div class="mc-actions">
-            <button class="btn btn-accent btn-sm" onclick="StudyPanel.open('${m.id}')">Estudar</button>
+            <button class="btn btn-accent btn-sm" onclick="TabManager.switchTab('study'); StudyPanel.open('${m.id}')">Estudar</button>
             <button class="btn btn-danger btn-sm" onclick="ImportPanel.delete('${m.id}')">🗑</button>
           </div>
         </div>
       `).join('');
     },
     delete: async (id) => {
-      if (await TabManager.askConfirm("Isso apagará o módulo e todos os seus cards ativados no Anki. Confirmar?")) {
+      if (await TabManager.askConfirm("Apagar módulo e todos os cards vinculados a ele?")) {
         DB.deleteModule(id); ImportPanel.renderGrid(); GlobalApp.updateBadges();
       }
     }
   };
 })();
 
-// ── PAINEL DE TREINAMENTO (ABA 2: ESTUDAR) ──
+// ── ABA 2: ESTUDO ──
 const StudyPanel = (() => {
   let activeModule = null;
 
@@ -385,7 +415,7 @@ const StudyPanel = (() => {
     refresh: () => {
       const box = document.getElementById('studyAvailableGrid');
       const mods = DB.getModules();
-      if (!mods.length) { box.innerHTML = '<p class="empty-state">Adicione histórias na aba Importar para começar.</p>'; return; }
+      if (!mods.length) { box.innerHTML = '<p class="empty-state">Importe módulos primeiro.</p>'; return; }
       box.innerHTML = mods.map(m => `
         <div class="module-card">
           <div class="mc-title">${m.title}</div>
@@ -430,9 +460,8 @@ const StudyPanel = (() => {
       if (DB.hasCard(sentenceId)) {
         DB.removeCardByOrigin(sentenceId);
         buttonElement.className = "btn btn-ghost btn-sm check-toggle-btn";
-        buttonElement.textContent = "✔ Concluído";
         if (parentCard) parentCard.classList.remove('card-active-green');
-        TabManager.showToast("Removido da fila de revisão.");
+        TabManager.showToast("Removido do Anki.");
       } else {
         DB.addCard({
           id: 'card_' + Math.random().toString(36).substring(2,11),
@@ -446,14 +475,14 @@ const StudyPanel = (() => {
         });
         buttonElement.className = "btn btn-primary btn-sm check-toggle-btn";
         if (parentCard) parentCard.classList.add('card-active-green');
-        TabManager.showToast("Card gerado automaticamente!", "success");
+        TabManager.showToast("Adicionado ao Anki!", "success");
       }
       GlobalApp.updateBadges();
     }
   };
 })();
 
-// ── GESTÃO DE BARALHOS CUSTOMIZADOS (ABA 3: BARALHOS) ──
+// ── ABA 3: BARALHOS ──
 const DecksPanel = (() => {
   return {
     init: () => {
@@ -462,7 +491,7 @@ const DecksPanel = (() => {
         if (!name) return;
         DB.addDeck(name);
         document.getElementById('newDeckName').value = '';
-        TabManager.showToast("Baralho criado com sucesso!", 'success');
+        TabManager.showToast("Baralho criado!", 'success');
         DecksPanel.refresh();
       };
 
@@ -487,7 +516,7 @@ const DecksPanel = (() => {
 
         document.getElementById('manualCardEn').value = '';
         document.getElementById('manualCardPt').value = '';
-        TabManager.showToast("Card avulso injetado no baralho!", 'success');
+        TabManager.showToast("Card inserido no baralho!", 'success');
         DecksPanel.refresh();
       };
     },
@@ -496,13 +525,12 @@ const DecksPanel = (() => {
       const decks = DB.getDecks();
       const cards = DB.getCards();
       
-      // Interface revisada para exibir todos os baralhos existentes com opção de exclusão
       container.innerHTML = decks.map(d => {
         const totalCards = cards.filter(c => c.deckId === d.id).length;
         return `
           <div class="voice-dashboard-panel" style="margin-bottom:.5rem; justify-content:space-between;">
             <div><strong>🗂 ${d.name}</strong> <span class="count-badge">${totalCards} cards</span></div>
-            ${d.id !== 'default_deck' ? `<button class="btn btn-danger btn-sm" onclick="DecksPanel.delete('${d.id}')">Excluir Baralho</button>` : '<span style="font-size:0.8rem; color:var(--text-lo);">Sistema</span>'}
+            ${d.id !== 'default_deck' ? `<button class="btn btn-danger btn-sm" onclick="DecksPanel.delete('${d.id}')">Excluir</button>` : '<span style="font-size:0.8rem; color:var(--text-lo);">Sistema</span>'}
           </div>
         `;
       }).join('');
@@ -513,14 +541,14 @@ const DecksPanel = (() => {
       VoiceEngine.init('cardVoiceDestiny');
     },
     delete: async (id) => {
-      if (await TabManager.askConfirm("Apagar este baralho? Os cards contidos nele serão transferidos para o Baralho Principal para preservar seu progresso.")) {
+      if (await TabManager.askConfirm("Apagar este baralho? Os cards voltarão para o baralho Principal.")) {
         DB.deleteDeck(id); DecksPanel.refresh();
       }
     }
   };
 })();
 
-// ── REPETIÇÃO ESPAÇADA ATIVA (ABA 4: REVISÃO) ──
+// ── ABA 4: REVISÃO (ANKI) ──
 const ReviewPanel = (() => {
   let activeQueue = [];
   let index = 0;
@@ -553,10 +581,10 @@ const ReviewPanel = (() => {
         if (quality < 3) {
           const failedCard = activeQueue.splice(index, 1)[0];
           activeQueue.push(failedCard);
-          TabManager.showToast("Retido para reavaliação rápida!");
+          TabManager.showToast("Retido para reavaliação!");
         } else {
           index++;
-          TabManager.showToast("Progresso salvo!");
+          TabManager.showToast("Agendado!");
         }
         
         ReviewPanel.renderCard();
@@ -604,7 +632,7 @@ const ReviewPanel = (() => {
   };
 })();
 
-// ── FILA REPRODUTORA E PLAYLIST (ABA 5: PLAYLIST) ──
+// ── ABA 5: PLAYLIST ──
 const PlaylistPanel = (() => {
   let isPlaying = false;
   let trackIdx = 0;
@@ -633,16 +661,16 @@ const PlaylistPanel = (() => {
       
       let totalSeconds = 0;
       mods.forEach(m => totalSeconds += (m.sentences.length * 4));
-      document.getElementById('playlistDurationTrack').textContent = `Tempo acumulado estimado: ${Math.round(totalSeconds / 60)} minutos`;
+      document.getElementById('playlistDurationTrack').textContent = `Tempo estimado: ${Math.round(totalSeconds / 60)} minutos`;
 
       if (!mods.length) {
-        container.innerHTML = '<p class="empty-state">Nenhum áudio integrado na base.</p>';
+        container.innerHTML = '<p class="empty-state">Nenhuma lição adicionada.</p>';
         return;
       }
 
       container.innerHTML = mods.map((m, idx) => `
         <div class="playlist-item ${trackIdx === idx && isPlaying ? 'active-track' : ''}">
-          <div><strong>${idx + 1}. Áudio Adaptado — ${m.title}</strong></div>
+          <div><strong>${idx + 1}. Audio Compilado — ${m.title}</strong></div>
           <span class="count-badge">👁 ${DB.getViewCount('track_views_' + m.id)} execuções</span>
         </div>
       `).join('');
@@ -663,7 +691,7 @@ const PlaylistPanel = (() => {
 
       const activeMod = mods[trackIdx];
       document.getElementById('playlistCurrentTitle').textContent = activeMod.title;
-      document.getElementById('playlistCurrentSub').textContent = "Treinamento passivo sequencial ativo...";
+      document.getElementById('playlistCurrentSub').textContent = "Tocando sequencialmente...";
       
       const key = 'track_views_' + activeMod.id;
       DB.incrementViewCount(key);
@@ -723,14 +751,14 @@ const GlobalApp = (() => {
         try {
           const rawText = await e.target.files[0].text();
           if (DB.importRawJSON(rawText)) {
-            TabManager.showToast("Banco de dados sincronizado!", 'success');
+            TabManager.showToast("Banco carregado com sucesso!", 'success');
             setTimeout(() => location.reload(), 1000);
-          } else { TabManager.showToast("Estrutura inválida.", 'error'); }
+          } else { TabManager.showToast("Arquivo JSON inválido.", 'error'); }
         } catch { TabManager.showToast("Falha ao abrir arquivo.", 'error'); }
       };
 
       document.getElementById('btnConfigClearAll').onclick = async () => {
-        if (await TabManager.askConfirm("Isso apagará permanentemente todo o histórico e lições. Continuar?")) {
+        if (await TabManager.askConfirm("Zerar todos os dados, baralhos e histórias?")) {
           DB.clearAll();
           location.reload();
         }
