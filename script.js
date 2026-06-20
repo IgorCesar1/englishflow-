@@ -1,5 +1,5 @@
 /**
- * EnglishFlow Engine — script.js (Inteligência de Leitura e Cache Blindados)
+ * EnglishFlow Engine — script.js (Engine Definitiva CIMV e Correção de UI)
  */
 
 'use strict';
@@ -12,9 +12,7 @@ const DB = (() => {
   
   const defaultSchema = {
     modules: [],
-    decks: [
-      { id: 'default_deck', name: 'Fundação (Principal)' }
-    ],
+    decks: [{ id: 'default_deck', name: 'Fundação (Principal)' }],
     cards: [],
     stats: {}
   };
@@ -38,95 +36,64 @@ const DB = (() => {
     }
   };
 
-  const save = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  };
+  const save = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); };
 
   return {
     getModules: () => load().modules,
     getDecks: () => load().decks,
     getCards: () => load().cards,
     getStats: () => load().stats,
-    
     addModule: (m) => { load().modules.push(m); save(); },
     deleteModule: (id) => { 
       load().modules = load().modules.filter(m => m.id !== id); 
       load().cards = load().cards.filter(c => c.originModuleId !== id);
       save(); 
     },
-    
     addDeck: (name) => {
       const id = 'deck_' + Math.random().toString(36).substring(2, 11);
-      load().decks.push({ id, name });
-      save();
-      return id;
+      load().decks.push({ id, name }); save(); return id;
     },
     deleteDeck: (id) => {
       if (id === 'default_deck') return false;
       load().decks = load().decks.filter(d => d.id !== id);
       load().cards.forEach(c => { if (c.deckId === id) c.deckId = 'default_deck'; });
-      save();
-      return true;
+      save(); return true;
     },
-    
     addCard: (card) => { load().cards.push(card); save(); },
     removeCardByOrigin: (sentenceId) => {
-      load().cards = load().cards.filter(c => c.sentenceId !== sentenceId);
-      save();
+      load().cards = load().cards.filter(c => c.sentenceId !== sentenceId); save();
     },
     hasCard: (sentenceId) => load().cards.some(c => c.sentenceId === sentenceId),
-    
     incrementViewCount: (audioKey) => {
-      const s = load().stats;
-      s[audioKey] = (s[audioKey] || 0) + 1;
-      save();
-      return s[audioKey];
+      const s = load().stats; s[audioKey] = (s[audioKey] || 0) + 1; save(); return s[audioKey];
     },
     getViewCount: (audioKey) => load().stats[audioKey] || 0,
-    
     importRawJSON: (jsonString) => {
       try {
         const parsed = JSON.parse(jsonString);
-        if (parsed.decks && parsed.cards) {
-          localStorage.setItem(STORAGE_KEY, jsonString);
-          data = parsed;
-          return true;
-        }
-      } catch {}
-      return false;
+        if (parsed.decks && parsed.cards) { localStorage.setItem(STORAGE_KEY, jsonString); data = parsed; return true; }
+      } catch {} return false;
     },
     clearAll: () => { localStorage.removeItem(STORAGE_KEY); data = null; load(); }
   };
 })();
 
-// ── ALGORITMO ANKI INTEGRADO (SM-2 ADAPTADO) ──
+// ── ALGORITMO ANKI INTEGRADO ──
 const SRS = (() => {
   const getTodayDateString = () => new Date().toISOString().slice(0, 10);
-
   return {
-    createTemplate: () => ({
-      interval: 1,
-      easeFactor: 2.5,
-      repetitions: 0,
-      nextReview: getTodayDateString()
-    }),
-    
+    createTemplate: () => ({ interval: 1, easeFactor: 2.5, repetitions: 0, nextReview: getTodayDateString() }),
     processResponse: (history, quality) => {
       const h = { ...history };
       if (quality < 3) {
-        h.repetitions = 0;
-        h.interval = 1; 
-        h.nextReview = getTodayDateString();
+        h.repetitions = 0; h.interval = 1; h.nextReview = getTodayDateString();
       } else {
         if (h.repetitions === 0) h.interval = 1;
         else if (h.repetitions === 1) h.interval = 3;
         else h.interval = Math.round(h.interval * h.easeFactor);
-        
         h.repetitions += 1;
         h.easeFactor = Math.max(1.3, h.easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-        
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + h.interval);
+        const targetDate = new Date(); targetDate.setDate(targetDate.getDate() + h.interval);
         h.nextReview = targetDate.toISOString().slice(0, 10);
       }
       return h;
@@ -141,15 +108,11 @@ const VoiceEngine = (() => {
   const synth = window.speechSynthesis;
   let activeVoiceName = '';
   let activeRate = 0.75;
-
   return {
     init: (selectElementId, callback) => {
       const populate = () => {
-        const select = document.getElementById(selectElementId);
-        if (!select) return;
-        
+        const select = document.getElementById(selectElementId); if (!select) return;
         const voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
-        
         select.innerHTML = voices.map(v => {
           let badge = "Nativo";
           if (v.lang === "en-US") badge = "Americano 🇺🇸";
@@ -157,21 +120,15 @@ const VoiceEngine = (() => {
           if (v.lang === "en-AU") badge = "Australiano 🇦🇺";
           return `<option value="${v.name}">${v.name} (${badge})</option>`;
         }).join('');
-        
-        if (voices.length && !activeVoiceName) {
-          activeVoiceName = voices[0].name;
-        }
+        if (voices.length && !activeVoiceName) activeVoiceName = voices[0].name;
         if (callback) callback(voices);
       };
-      
-      populate();
-      if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = populate;
+      populate(); if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = populate;
     },
     setVoice: (name) => { activeVoiceName = name; },
     setRate: (rate) => { activeRate = Number(rate); },
     speak: (text, onEndCallback) => {
-      synth.cancel();
-      if (!text) return;
+      synth.cancel(); if (!text) return;
       const utterance = new SpeechSynthesisUtterance(text);
       const matched = synth.getVoices().find(v => v.name === activeVoiceName);
       if (matched) utterance.voice = matched;
@@ -189,20 +146,15 @@ const TabManager = (() => {
   const confirmModal = document.getElementById('confirmModal');
   const confirmMsg = document.getElementById('confirmModalMsg');
   let confirmResolver = null;
-
   return {
     init: () => {
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.onclick = () => TabManager.switchTab(btn.dataset.tab);
-      });
-      
+      document.querySelectorAll('.tab-btn').forEach(btn => { btn.onclick = () => TabManager.switchTab(btn.dataset.tab); });
       document.getElementById('btnConfirmCancel').onclick = () => { confirmModal.classList.add('hidden'); if(confirmResolver) confirmResolver(false); };
       document.getElementById('btnConfirmOk').onclick = () => { confirmModal.classList.add('hidden'); if(confirmResolver) confirmResolver(true); };
     },
     switchTab: (tabId) => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tabId}`));
-      
       if (tabId === 'create') ImportPanel.renderGrid();
       if (tabId === 'study') StudyPanel.refresh();
       if (tabId === 'decks') DecksPanel.refresh();
@@ -211,19 +163,16 @@ const TabManager = (() => {
       GlobalApp.updateBadges();
     },
     showToast: (msg, mode = '') => {
-      toast.textContent = msg;
-      toast.className = `toast show ${mode}`;
+      toast.textContent = msg; toast.className = `toast show ${mode}`;
       setTimeout(() => toast.classList.remove('show'), 2500);
     },
     askConfirm: (msg) => new Promise(resolve => {
-      confirmMsg.textContent = msg;
-      confirmModal.classList.remove('hidden');
-      confirmResolver = resolve;
+      confirmMsg.textContent = msg; confirmModal.classList.remove('hidden'); confirmResolver = resolve;
     })
   };
 })();
 
-// ── ABA 1: IMPORTAÇÃO BLINDADA COM NOVO PARSER ──
+// ── ABA 1: IMPORTAÇÃO BLINDADA COM ALGORITMO CIMV ──
 const ImportPanel = (() => {
   let compiledSentences = [];
   let compiledTextBlock = "";
@@ -232,84 +181,91 @@ const ImportPanel = (() => {
     compiledSentences = [];
     compiledTextBlock = "";
 
-    const lines = fullText.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // Limpa quebras de linha sujas
+    let lines = fullText.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
-    let mode = "linha"; 
-    let lastEnglish = "";
+    // FILTRO DE LIXO: Remove cabeçalhos e rodapés específicos do CIMV e Mairo Vergara
+    lines = lines.filter(line => {
+      const up = line.toUpperCase();
+      if (up.includes("CIMV") || up.includes("CURSO DE INGL") || up.includes("MAIRO VERGARA") || up.includes("2019") || up.includes("2020")) return false;
+      if (/^\d+$/.test(line)) return false; // Remove números soltos de páginas
+      return true;
+    });
 
+    let startLinha = -1;
+    let startTreino = -1;
+
+    // Encontra os marcadores do curso
     for (let i = 0; i < lines.length; i++) {
-      const uLine = lines[i].toUpperCase();
-      
-      if (uLine.includes("TEXTO PARA TREINAMENTO") || uLine.includes("TEXTO COM ÁUDIO")) { 
-        mode = "treino"; 
-        continue; 
-      }
+      const up = lines[i].toUpperCase();
+      if (up.includes("TEXTO LINHA A LINHA")) startLinha = i;
+      if (up.includes("TEXTO PARA TREINAMENTO")) startTreino = i;
+    }
 
-      if (mode === "linha") {
-        // Ignora lixo de cabeçalho
-        if (uLine.includes("JACK HANNAFORD") || uLine.includes("PARTE") || uLine.includes("TEXTO LINHA") || uLine === "TEXTO LINHA A LINHA") continue;
+    // EXTRAÇÃO LINHA A LINHA
+    if (startLinha !== -1) {
+      let endLinha = startTreino !== -1 ? startTreino : lines.length;
+      let chunkLines = lines.slice(startLinha + 1, endLinha);
 
-        // Nova validação inteligente: Tem acento OU tem palavras muito comuns do português
-        const hasPortuguese = /[ãáéíóúçÂÊÎÔÛÃÕ]/i.test(lines[i]) || /\b(um|uma|ele|ela|e|de|que|do|da|no|na|para|com|se|os|as|era|foi|tinha|havia)\b/i.test(lines[i]);
+      let tempEn = "";
+      let tempPt = "";
 
-        if (!hasPortuguese) {
-          // É uma linha em inglês.
-          if (lastEnglish) {
-             // Se já havia uma frase em inglês esperando e veio outra em inglês, salva a anterior sem tradução
-             compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente (Edite no Baralho)" });
-          }
-          lastEnglish = lines[i];
+      for (let i = 0; i < chunkLines.length; i++) {
+        let line = chunkLines[i];
+        
+        // Verifica se a linha é português: tem acento ou palavras-chave fortes do idioma
+        let hasPtAccents = /[ãáéíóúçÂÊÎÔÛÃÕ]/i.test(line);
+        let hasPtWords = /\b(um|uma|ele|ela|que|do|da|no|na|para|com|se|os|as|era|foi|tinha|havia|qual|deles|você|mesmo|esposa|marido)\b/i.test(line);
+
+        if (hasPtAccents || hasPtWords) {
+          tempPt += (tempPt ? " " : "") + line;
         } else {
-          // É uma tradução em português
-          if (lastEnglish) {
-            compiledSentences.push({ en: lastEnglish, pt: lines[i] });
-            lastEnglish = "";
+          // É uma linha em inglês. Se já havia um bloco formado, salva no baralho.
+          if (tempEn && tempPt) {
+            compiledSentences.push({ en: tempEn, pt: tempPt });
+            tempEn = line;
+            tempPt = "";
           } else {
-            // Se veio um português e não tinha inglês antes, anexa à última tradução criada
-            if (compiledSentences.length > 0) {
-              compiledSentences[compiledSentences.length - 1].pt += " " + lines[i];
-            }
+            tempEn += (tempEn ? " " : "") + line;
           }
         }
-      } else if (mode === "treino") {
-        compiledTextBlock += lines[i] + " ";
       }
+      if (tempEn) compiledSentences.push({ en: tempEn, pt: tempPt || "Tradução pendente" });
     }
-    
-    // Se o PDF acabou e sobrou uma frase em inglês pendente, salva ela.
-    if (lastEnglish) {
-      compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente (Edite no Baralho)" });
-    }
-    
-    // Reconstrói texto de treinamento se não houver
-    if (!compiledTextBlock && compiledSentences.length) {
+
+    // EXTRAÇÃO DO TEXTO DE TREINAMENTO
+    if (startTreino !== -1) {
+      compiledTextBlock = lines.slice(startTreino + 1).join(" ");
+    } else {
       compiledTextBlock = compiledSentences.map(s => s.en).join(" ");
     }
   };
 
-  const updateInputVisibility = () => {
+  const updateInputVisibility = (e) => {
     const isPdf = document.querySelector('input[name="importMode"]:checked').value === 'pdf';
     const pdfZone = document.getElementById('pdfDropZone');
-    const textArea = document.getElementById('textInputArea');
+    const textZone = document.getElementById('textInputArea');
     
+    // Força bruta via JS para esmagar regras de CSS presas no cache
     if (isPdf) {
-      pdfZone.style.display = 'block';
-      textArea.style.display = 'none';
+      pdfZone.style.setProperty('display', 'block', 'important');
+      textZone.style.setProperty('display', 'none', 'important');
     } else {
-      pdfZone.style.display = 'none';
-      textArea.style.display = 'flex';
+      pdfZone.style.setProperty('display', 'none', 'important');
+      textZone.style.setProperty('display', 'flex', 'important');
     }
   };
 
   return {
     init: () => {
-      const radios = document.querySelectorAll('input[name="importMode"]');
-      radios.forEach(radio => radio.addEventListener('change', updateInputVisibility));
+      document.querySelectorAll('input[name="importMode"]').forEach(radio => {
+        radio.addEventListener('click', updateInputVisibility);
+      });
       updateInputVisibility();
 
       document.getElementById('pdfFileInput').addEventListener('change', async (e) => {
         const file = e.target.files[0]; if (!file) return;
-        TabManager.showToast("Lendo PDF e estruturando frases...");
+        TabManager.showToast("Decodificando PDF do Curso...");
         try {
           const buffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -322,18 +278,14 @@ const ImportPanel = (() => {
           parseRawBuffer(extractedText);
           
           if (compiledSentences.length === 0) {
-            TabManager.showToast("Nenhuma frase encontrada no PDF.", 'error');
+            TabManager.showToast("Nenhuma estrutura compatível encontrada.", 'error');
             return;
           }
           
           TabManager.showToast(`${compiledSentences.length} frases mapeadas!`, 'success');
-          
-          if (!document.getElementById('moduleTitle').value) {
-            document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
-          }
+          if (!document.getElementById('moduleTitle').value) document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
         } catch (err) {
-          console.error(err);
-          TabManager.showToast("Falha ao ler PDF.", 'error');
+          console.error(err); TabManager.showToast("Falha ao ler PDF.", 'error');
         }
         e.target.value = '';
       });
@@ -347,24 +299,19 @@ const ImportPanel = (() => {
           const enLines = document.getElementById('rawTextEn').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
           const ptLines = document.getElementById('rawTextPt').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
           if (!enLines.length) return TabManager.showToast("Insira as frases em inglês.", 'error');
-          
           compiledSentences = enLines.map((en, idx) => ({ en, pt: ptLines[idx] || "Tradução pendente" }));
           compiledTextBlock = enLines.join(" ");
         }
 
-        if (!compiledSentences || !compiledSentences.length) {
-          return TabManager.showToast("Nenhum dado estruturado pendente.", 'error');
-        }
+        if (!compiledSentences || !compiledSentences.length) return TabManager.showToast("Nenhum dado pronto para salvar.", 'error');
 
         const sentences = compiledSentences.map(s => ({ id: 's_' + Math.random().toString(36).substring(2,11), english: s.en, portuguese: s.pt }));
         DB.addModule({ id: 'mod_' + Math.random().toString(36).substring(2,11), title, sentences, fullText: compiledTextBlock });
         
         document.getElementById('mainCreateForm').reset();
-        compiledSentences = []; 
-        compiledTextBlock = "";
-        updateInputVisibility();
+        compiledSentences = []; compiledTextBlock = ""; updateInputVisibility();
         
-        TabManager.showToast("Módulo criado com sucesso!", 'success');
+        TabManager.showToast("Módulo salvo na base de dados!", 'success');
         ImportPanel.renderGrid();
       };
 
@@ -377,7 +324,7 @@ const ImportPanel = (() => {
       box.innerHTML = mods.map(m => `
         <div class="module-card">
           <div class="mc-title">${m.title}</div>
-          <div class="mc-meta">${m.sentences.length} estruturas</div>
+          <div class="mc-meta">${m.sentences.length} estruturas extraídas</div>
           <div class="mc-actions">
             <button class="btn btn-accent btn-sm" onclick="TabManager.switchTab('study'); StudyPanel.open('${m.id}')">Estudar</button>
             <button class="btn btn-danger btn-sm" onclick="ImportPanel.delete('${m.id}')">🗑</button>
@@ -396,12 +343,10 @@ const ImportPanel = (() => {
 // ── ABA 2: ESTUDO ──
 const StudyPanel = (() => {
   let activeModule = null;
-
   return {
     init: () => {
       document.getElementById('btnLeaveStudy').onclick = () => {
-        document.getElementById('studyActiveView').classList.add('hidden');
-        document.getElementById('studySelectorView').classList.remove('hidden');
+        document.getElementById('studyActiveView').classList.add('hidden'); document.getElementById('studySelectorView').classList.remove('hidden');
       };
       document.getElementById('btnToggleLinha').onclick = () => {
         document.getElementById('btnToggleLinha').classList.add('active'); document.getElementById('btnToggleTexto').classList.remove('active');
@@ -421,11 +366,7 @@ const StudyPanel = (() => {
           const currentSentence = activeModule.sentences[currentIdx];
           const element = document.getElementById(`scard_${currentSentence.id}`);
           if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          VoiceEngine.speak(currentSentence.english, () => {
-            currentIdx++;
-            setTimeout(readNext, 1000);
-          });
+          VoiceEngine.speak(currentSentence.english, () => { currentIdx++; setTimeout(readNext, 1000); });
         };
         readNext();
       };
@@ -444,10 +385,8 @@ const StudyPanel = (() => {
     },
     open: (id) => {
       activeModule = DB.getModules().find(m => m.id === id); if (!activeModule) return;
-      document.getElementById('studySelectorView').classList.add('hidden');
-      document.getElementById('studyActiveView').classList.remove('hidden');
+      document.getElementById('studySelectorView').classList.add('hidden'); document.getElementById('studyActiveView').classList.remove('hidden');
       document.getElementById('activeStudyTitle').textContent = activeModule.title;
-      
       VoiceEngine.init('studyVoicePicker');
       
       const container = document.getElementById('studyLinhaContainer');
@@ -465,33 +404,19 @@ const StudyPanel = (() => {
           </div>
         `;
       }).join('');
-      
-      container.querySelectorAll('.check-toggle-btn').forEach(btn => {
-        btn.onclick = () => StudyPanel.toggleCheck(btn, btn.dataset.sid);
-      });
-
+      container.querySelectorAll('.check-toggle-btn').forEach(btn => { btn.onclick = () => StudyPanel.toggleCheck(btn, btn.dataset.sid); });
       document.getElementById('blockFullTextParagraph').textContent = activeModule.fullText;
     },
     toggleCheck: (buttonElement, sentenceId) => {
       const sentence = activeModule.sentences.find(x => x.id === sentenceId);
       const parentCard = document.getElementById(`scard_${sentenceId}`);
-      
       if (DB.hasCard(sentenceId)) {
         DB.removeCardByOrigin(sentenceId);
         buttonElement.className = "btn btn-ghost btn-sm check-toggle-btn";
         if (parentCard) parentCard.classList.remove('card-active-green');
         TabManager.showToast("Removido do Anki.");
       } else {
-        DB.addCard({
-          id: 'card_' + Math.random().toString(36).substring(2,11),
-          sentenceId: sentenceId,
-          originModuleId: activeModule.id,
-          deckId: 'default_deck',
-          english: sentence.english,
-          portuguese: sentence.portuguese,
-          voiceName: document.getElementById('studyVoicePicker').value,
-          history: SRS.createTemplate()
-        });
+        DB.addCard({ id: 'card_' + Math.random().toString(36).substring(2,11), sentenceId: sentenceId, originModuleId: activeModule.id, deckId: 'default_deck', english: sentence.english, portuguese: sentence.portuguese, voiceName: document.getElementById('studyVoicePicker').value, history: SRS.createTemplate() });
         buttonElement.className = "btn btn-primary btn-sm check-toggle-btn";
         if (parentCard) parentCard.classList.add('card-active-green');
         TabManager.showToast("Adicionado ao Anki!", "success");
@@ -506,44 +431,19 @@ const DecksPanel = (() => {
   return {
     init: () => {
       document.getElementById('btnCreateDeck').onclick = () => {
-        const name = document.getElementById('newDeckName').value.trim();
-        if (!name) return;
-        DB.addDeck(name);
-        document.getElementById('newDeckName').value = '';
-        TabManager.showToast("Baralho criado!", 'success');
-        DecksPanel.refresh();
+        const name = document.getElementById('newDeckName').value.trim(); if (!name) return;
+        DB.addDeck(name); document.getElementById('newDeckName').value = ''; TabManager.showToast("Baralho criado!", 'success'); DecksPanel.refresh();
       };
-
       document.getElementById('btnSaveManualCard').onclick = () => {
-        const deckId = document.getElementById('cardDeckDestiny').value;
-        const voiceName = document.getElementById('cardVoiceDestiny').value;
-        const en = document.getElementById('manualCardEn').value.trim();
-        const pt = document.getElementById('manualCardPt').value.trim();
-        
+        const deckId = document.getElementById('cardDeckDestiny').value; const voiceName = document.getElementById('cardVoiceDestiny').value;
+        const en = document.getElementById('manualCardEn').value.trim(); const pt = document.getElementById('manualCardPt').value.trim();
         if (!en || !pt) return TabManager.showToast("Preencha Frente e Verso.", 'error');
-        
-        DB.addCard({
-          id: 'card_' + Math.random().toString(36).substring(2,11),
-          sentenceId: null,
-          originModuleId: null,
-          deckId,
-          english: en,
-          portuguese: pt,
-          voiceName,
-          history: SRS.createTemplate()
-        });
-
-        document.getElementById('manualCardEn').value = '';
-        document.getElementById('manualCardPt').value = '';
-        TabManager.showToast("Card inserido no baralho!", 'success');
-        DecksPanel.refresh();
+        DB.addCard({ id: 'card_' + Math.random().toString(36).substring(2,11), sentenceId: null, originModuleId: null, deckId, english: en, portuguese: pt, voiceName, history: SRS.createTemplate() });
+        document.getElementById('manualCardEn').value = ''; document.getElementById('manualCardPt').value = ''; TabManager.showToast("Card inserido no baralho!", 'success'); DecksPanel.refresh();
       };
     },
     refresh: () => {
-      const container = document.getElementById('decksManagementContainer');
-      const decks = DB.getDecks();
-      const cards = DB.getCards();
-      
+      const container = document.getElementById('decksManagementContainer'); const decks = DB.getDecks(); const cards = DB.getCards();
       container.innerHTML = decks.map(d => {
         const totalCards = cards.filter(c => c.deckId === d.id).length;
         return `
@@ -553,140 +453,67 @@ const DecksPanel = (() => {
           </div>
         `;
       }).join('');
-
-      const sel = document.getElementById('cardDeckDestiny');
-      if(sel) sel.innerHTML = decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-
+      const sel = document.getElementById('cardDeckDestiny'); if(sel) sel.innerHTML = decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
       VoiceEngine.init('cardVoiceDestiny');
     },
-    delete: async (id) => {
-      if (await TabManager.askConfirm("Apagar este baralho? Os cards voltarão para o baralho Principal.")) {
-        DB.deleteDeck(id); DecksPanel.refresh();
-      }
-    }
+    delete: async (id) => { if (await TabManager.askConfirm("Apagar este baralho? Os cards voltarão para o baralho Principal.")) { DB.deleteDeck(id); DecksPanel.refresh(); } }
   };
 })();
 
 // ── ABA 4: REVISÃO (ANKI) ──
 const ReviewPanel = (() => {
-  let activeQueue = [];
-  let index = 0;
-
+  let activeQueue = []; let index = 0;
   return {
     init: () => {
       document.getElementById('btnRevealReviewAnswer').onclick = () => {
-        document.getElementById('reviewCardBackBlock').classList.remove('hidden');
-        document.getElementById('reviewActionTriggerRow').classList.add('hidden');
-        document.getElementById('reviewFeedbackButtonRow').classList.remove('hidden');
+        document.getElementById('reviewCardBackBlock').classList.remove('hidden'); document.getElementById('reviewActionTriggerRow').classList.add('hidden'); document.getElementById('reviewFeedbackButtonRow').classList.remove('hidden');
       };
-
       document.getElementById('btnSpeakReviewFront').onclick = () => {
-        if (activeQueue[index]) {
-          VoiceEngine.setVoice(activeQueue[index].voiceName);
-          VoiceEngine.speak(activeQueue[index].english);
-        }
+        if (activeQueue[index]) { VoiceEngine.setVoice(activeQueue[index].voiceName); VoiceEngine.speak(activeQueue[index].english); }
       };
-
       document.getElementById('reviewFeedbackButtonRow').onclick = (e) => {
-        const btn = e.target.closest('[data-q]');
-        if (!btn) return;
-        
-        const quality = Number(btn.dataset.q);
-        const card = activeQueue[index];
-        
-        card.history = SRS.processResponse(card.history, quality);
-        DB.saveCards;
-        
-        if (quality < 3) {
-          const failedCard = activeQueue.splice(index, 1)[0];
-          activeQueue.push(failedCard);
-          TabManager.showToast("Retido para reavaliação!");
-        } else {
-          index++;
-          TabManager.showToast("Agendado!");
-        }
-        
+        const btn = e.target.closest('[data-q]'); if (!btn) return;
+        const quality = Number(btn.dataset.q); const card = activeQueue[index];
+        card.history = SRS.processResponse(card.history, quality); DB.saveCards;
+        if (quality < 3) { const failedCard = activeQueue.splice(index, 1)[0]; activeQueue.push(failedCard); TabManager.showToast("Retido para reavaliação!"); } 
+        else { index++; TabManager.showToast("Agendado!"); }
         ReviewPanel.renderCard();
       };
     },
     startSession: () => {
-      const allCards = DB.getCards();
-      activeQueue = allCards.filter(c => SRS.isDue(c));
-      index = 0;
-      
+      const allCards = DB.getCards(); activeQueue = allCards.filter(c => SRS.isDue(c)); index = 0;
       document.getElementById('reviewSessionSubtitle').textContent = `${activeQueue.length} cards agendados para hoje`;
-      
-      if (!activeQueue.length) {
-        document.getElementById('reviewActiveContainer').classList.add('hidden');
-        document.getElementById('reviewEmptyState').classList.remove('hidden');
-      } else {
-        document.getElementById('reviewEmptyState').classList.add('hidden');
-        document.getElementById('reviewActiveContainer').classList.remove('hidden');
-        ReviewPanel.renderCard();
-      }
+      if (!activeQueue.length) { document.getElementById('reviewActiveContainer').classList.add('hidden'); document.getElementById('reviewEmptyState').classList.remove('hidden'); } 
+      else { document.getElementById('reviewEmptyState').classList.add('hidden'); document.getElementById('reviewActiveContainer').classList.remove('hidden'); ReviewPanel.renderCard(); }
     },
     renderCard: () => {
-      if (index >= activeQueue.length) {
-        document.getElementById('reviewActiveContainer').classList.add('hidden');
-        document.getElementById('reviewEmptyState').classList.remove('hidden');
-        GlobalApp.updateBadges();
-        return;
-      }
-      
-      const card = activeQueue[index];
-      const decks = DB.getDecks();
-      const matchedDeck = decks.find(d => d.id === card.deckId);
-      
+      if (index >= activeQueue.length) { document.getElementById('reviewActiveContainer').classList.add('hidden'); document.getElementById('reviewEmptyState').classList.remove('hidden'); GlobalApp.updateBadges(); return; }
+      const card = activeQueue[index]; const decks = DB.getDecks(); const matchedDeck = decks.find(d => d.id === card.deckId);
       document.getElementById('reviewCardDeckLabel').textContent = matchedDeck ? matchedDeck.name.toUpperCase() : "BARALHO";
-      document.getElementById('reviewTextFront').textContent = card.english;
-      document.getElementById('reviewTextBack').textContent = card.portuguese;
-      
-      document.getElementById('reviewCardBackBlock').classList.add('hidden');
-      document.getElementById('reviewActionTriggerRow').classList.remove('hidden');
-      document.getElementById('reviewFeedbackButtonRow').classList.add('hidden');
-      
-      VoiceEngine.setVoice(card.voiceName);
-      VoiceEngine.speak(card.english);
+      document.getElementById('reviewTextFront').textContent = card.english; document.getElementById('reviewTextBack').textContent = card.portuguese;
+      document.getElementById('reviewCardBackBlock').classList.add('hidden'); document.getElementById('reviewActionTriggerRow').classList.remove('hidden'); document.getElementById('reviewFeedbackButtonRow').classList.add('hidden');
+      VoiceEngine.setVoice(card.voiceName); VoiceEngine.speak(card.english);
     }
   };
 })();
 
 // ── ABA 5: PLAYLIST ──
 const PlaylistPanel = (() => {
-  let isPlaying = false;
-  let trackIdx = 0;
-  let delayTimer = null;
-
+  let isPlaying = false; let trackIdx = 0; let delayTimer = null;
   return {
     init: () => {
       document.getElementById('playlistBtnPlay').onclick = () => {
-        if (isPlaying) {
-          isPlaying = false;
-          document.getElementById('playlistBtnPlay').textContent = "▶ Iniciar";
-          clearTimeout(delayTimer); VoiceEngine.stop();
-        } else {
-          isPlaying = true;
-          document.getElementById('playlistBtnPlay').textContent = "⏸ Pausar";
-          PlaylistPanel.executeTrack();
-        }
+        if (isPlaying) { isPlaying = false; document.getElementById('playlistBtnPlay').textContent = "▶ Iniciar"; clearTimeout(delayTimer); VoiceEngine.stop(); } 
+        else { isPlaying = true; document.getElementById('playlistBtnPlay').textContent = "⏸ Pausar"; PlaylistPanel.executeTrack(); }
       };
-      
       document.getElementById('playlistBtnNext').onclick = () => { PlaylistPanel.shift(1); };
       document.getElementById('playlistBtnPrev').onclick = () => { PlaylistPanel.shift(-1); };
     },
     refresh: () => {
-      const container = document.getElementById('playlistTracksBox');
-      const mods = DB.getModules();
-      
-      let totalSeconds = 0;
-      mods.forEach(m => totalSeconds += (m.sentences.length * 4));
+      const container = document.getElementById('playlistTracksBox'); const mods = DB.getModules();
+      let totalSeconds = 0; mods.forEach(m => totalSeconds += (m.sentences.length * 4));
       document.getElementById('playlistDurationTrack').textContent = `Tempo estimado: ${Math.round(totalSeconds / 60)} minutos`;
-
-      if (!mods.length) {
-        container.innerHTML = '<p class="empty-state">Nenhuma lição adicionada.</p>';
-        return;
-      }
-
+      if (!mods.length) { container.innerHTML = '<p class="empty-state">Nenhuma lição adicionada.</p>'; return; }
       container.innerHTML = mods.map((m, idx) => `
         <div class="playlist-item ${trackIdx === idx && isPlaying ? 'active-track' : ''}">
           <div><strong>${idx + 1}. Audio Compilado — ${m.title}</strong></div>
@@ -695,57 +522,20 @@ const PlaylistPanel = (() => {
       `).join('');
     },
     executeTrack: () => {
-      const mods = DB.getModules();
-      if (!mods.length || !isPlaying) return;
-      
-      if (trackIdx >= mods.length) {
-        if (document.getElementById('playlistLoopToggle').checked) {
-          trackIdx = 0;
-        } else {
-          isPlaying = false;
-          document.getElementById('playlistBtnPlay').textContent = "▶ Iniciar";
-          return;
-        }
-      }
-
-      const activeMod = mods[trackIdx];
-      document.getElementById('playlistCurrentTitle').textContent = activeMod.title;
-      document.getElementById('playlistCurrentSub').textContent = "Tocando sequencialmente...";
-      
-      const key = 'track_views_' + activeMod.id;
-      DB.incrementViewCount(key);
-      PlaylistPanel.refresh();
-
+      const mods = DB.getModules(); if (!mods.length || !isPlaying) return;
+      if (trackIdx >= mods.length) { if (document.getElementById('playlistLoopToggle').checked) { trackIdx = 0; } else { isPlaying = false; document.getElementById('playlistBtnPlay').textContent = "▶ Iniciar"; return; } }
+      const activeMod = mods[trackIdx]; document.getElementById('playlistCurrentTitle').textContent = activeMod.title; document.getElementById('playlistCurrentSub').textContent = "Tocando sequencialmente...";
+      const key = 'track_views_' + activeMod.id; DB.incrementViewCount(key); PlaylistPanel.refresh();
       let sentencePointer = 0;
       const readBlock = () => {
         if (!isPlaying || trackIdx >= mods.length) return;
-        if (sentencePointer >= activeMod.sentences.length) {
-          trackIdx++;
-          delayTimer = setTimeout(PlaylistPanel.executeTrack, 1500);
-          return;
-        }
-        
-        const s = activeMod.sentences[sentencePointer];
-        document.getElementById('playlistProgressIndicator').style.width = `${((sentencePointer + 1) / activeMod.sentences.length) * 100}%`;
-        
-        VoiceEngine.speak(s.english, () => {
-          sentencePointer++;
-          delayTimer = setTimeout(readBlock, 1200);
-        });
+        if (sentencePointer >= activeMod.sentences.length) { trackIdx++; delayTimer = setTimeout(PlaylistPanel.executeTrack, 1500); return; }
+        const s = activeMod.sentences[sentencePointer]; document.getElementById('playlistProgressIndicator').style.width = `${((sentencePointer + 1) / activeMod.sentences.length) * 100}%`;
+        VoiceEngine.speak(s.english, () => { sentencePointer++; delayTimer = setTimeout(readBlock, 1200); });
       };
-
       readBlock();
     },
-    shift: (offset) => {
-      clearTimeout(delayTimer);
-      VoiceEngine.stop();
-      trackIdx += offset;
-      const mods = DB.getModules();
-      if (trackIdx < 0) trackIdx = mods.length - 1;
-      if (trackIdx >= mods.length) trackIdx = 0;
-      if (isPlaying) PlaylistPanel.executeTrack();
-      else PlaylistPanel.refresh();
-    }
+    shift: (offset) => { clearTimeout(delayTimer); VoiceEngine.stop(); trackIdx += offset; const mods = DB.getModules(); if (trackIdx < 0) trackIdx = mods.length - 1; if (trackIdx >= mods.length) trackIdx = 0; if (isPlaying) PlaylistPanel.executeTrack(); else PlaylistPanel.refresh(); }
   };
 })();
 
@@ -753,47 +543,15 @@ const PlaylistPanel = (() => {
 const GlobalApp = (() => {
   return {
     init: () => {
-      TabManager.init();
-      ImportPanel.init();
-      StudyPanel.init();
-      DecksPanel.init();
-      ReviewPanel.init();
-      PlaylistPanel.init();
-      
-      document.getElementById('btnConfigExport').onclick = () => {
-        const blob = new Blob([localStorage.getItem('englishflow_premium_db')], { type: 'application/json' });
-        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `englishflow_backup_${SRS.todayStr()}.json` });
-        a.click();
-      };
-      
-      document.getElementById('configImportFile').onchange = async (e) => {
-        try {
-          const rawText = await e.target.files[0].text();
-          if (DB.importRawJSON(rawText)) {
-            TabManager.showToast("Banco carregado com sucesso!", 'success');
-            setTimeout(() => location.reload(), 1000);
-          } else { TabManager.showToast("Arquivo JSON inválido.", 'error'); }
-        } catch { TabManager.showToast("Falha ao abrir arquivo.", 'error'); }
-      };
-
-      document.getElementById('btnConfigClearAll').onclick = async () => {
-        if (await TabManager.askConfirm("Zerar todos os dados, baralhos e histórias?")) {
-          DB.clearAll();
-          location.reload();
-        }
-      };
-
+      TabManager.init(); ImportPanel.init(); StudyPanel.init(); DecksPanel.init(); ReviewPanel.init(); PlaylistPanel.init();
+      document.getElementById('btnConfigExport').onclick = () => { const blob = new Blob([localStorage.getItem('englishflow_premium_db')], { type: 'application/json' }); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `englishflow_backup_${SRS.todayStr()}.json` }); a.click(); };
+      document.getElementById('configImportFile').onchange = async (e) => { try { const rawText = await e.target.files[0].text(); if (DB.importRawJSON(rawText)) { TabManager.showToast("Banco carregado com sucesso!", 'success'); setTimeout(() => location.reload(), 1000); } else { TabManager.showToast("Arquivo JSON inválido.", 'error'); } } catch { TabManager.showToast("Falha ao abrir arquivo.", 'error'); } };
+      document.getElementById('btnConfigClearAll').onclick = async () => { if (await TabManager.askConfirm("Zerar todos os dados, baralhos e histórias?")) { DB.clearAll(); location.reload(); } };
       GlobalApp.updateBadges();
     },
     updateBadges: () => {
-      const dues = DB.getCards().filter(c => SRS.isDue(c)).length;
-      const badge = document.getElementById('review-badge');
-      if (dues > 0) {
-        badge.textContent = dues;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
+      const dues = DB.getCards().filter(c => SRS.isDue(c)).length; const badge = document.getElementById('review-badge');
+      if (dues > 0) { badge.textContent = dues; badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
     }
   };
 })();
