@@ -1,5 +1,5 @@
 /**
- * EnglishFlow Engine — script.js (Engine de Leitura Forçada e UI Blindada)
+ * EnglishFlow Engine — script.js (Inteligência de Leitura e Cache Blindados)
  */
 
 'use strict';
@@ -223,7 +223,7 @@ const TabManager = (() => {
   };
 })();
 
-// ── ABA 1: IMPORTAÇÃO BLINDADA ──
+// ── ABA 1: IMPORTAÇÃO BLINDADA COM NOVO PARSER ──
 const ImportPanel = (() => {
   let compiledSentences = [];
   let compiledTextBlock = "";
@@ -234,7 +234,6 @@ const ImportPanel = (() => {
 
     const lines = fullText.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
-    // Inicia diretamente no modo linha para não depender do título "TEXTO LINHA A LINHA"
     let mode = "linha"; 
     let lastEnglish = "";
 
@@ -248,16 +247,28 @@ const ImportPanel = (() => {
 
       if (mode === "linha") {
         // Ignora lixo de cabeçalho
-        if (uLine.includes("JACK HANNAFORD") || uLine.includes("PARTE") || uLine.includes("TEXTO LINHA")) continue;
+        if (uLine.includes("JACK HANNAFORD") || uLine.includes("PARTE") || uLine.includes("TEXTO LINHA") || uLine === "TEXTO LINHA A LINHA") continue;
 
-        // Validação leve de inglês (tem letras e não tem caracteres super brasileiros)
-        if (/[a-zA-Z]/.test(lines[i]) && !lines[i].match(/[ãáéíóúçÂÊÎÔÛÃÕ]/i)) {
-          if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente" });
+        // Nova validação inteligente: Tem acento OU tem palavras muito comuns do português
+        const hasPortuguese = /[ãáéíóúçÂÊÎÔÛÃÕ]/i.test(lines[i]) || /\b(um|uma|ele|ela|e|de|que|do|da|no|na|para|com|se|os|as|era|foi|tinha|havia)\b/i.test(lines[i]);
+
+        if (!hasPortuguese) {
+          // É uma linha em inglês.
+          if (lastEnglish) {
+             // Se já havia uma frase em inglês esperando e veio outra em inglês, salva a anterior sem tradução
+             compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente (Edite no Baralho)" });
+          }
           lastEnglish = lines[i];
         } else {
+          // É uma tradução em português
           if (lastEnglish) {
             compiledSentences.push({ en: lastEnglish, pt: lines[i] });
             lastEnglish = "";
+          } else {
+            // Se veio um português e não tinha inglês antes, anexa à última tradução criada
+            if (compiledSentences.length > 0) {
+              compiledSentences[compiledSentences.length - 1].pt += " " + lines[i];
+            }
           }
         }
       } else if (mode === "treino") {
@@ -265,8 +276,15 @@ const ImportPanel = (() => {
       }
     }
     
-    if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente" });
-    if (!compiledTextBlock && compiledSentences.length) compiledTextBlock = compiledSentences.map(s => s.en).join(" ");
+    // Se o PDF acabou e sobrou uma frase em inglês pendente, salva ela.
+    if (lastEnglish) {
+      compiledSentences.push({ en: lastEnglish, pt: "Tradução pendente (Edite no Baralho)" });
+    }
+    
+    // Reconstrói texto de treinamento se não houver
+    if (!compiledTextBlock && compiledSentences.length) {
+      compiledTextBlock = compiledSentences.map(s => s.en).join(" ");
+    }
   };
 
   const updateInputVisibility = () => {
@@ -274,7 +292,6 @@ const ImportPanel = (() => {
     const pdfZone = document.getElementById('pdfDropZone');
     const textArea = document.getElementById('textInputArea');
     
-    // Força bruta via estilo inline para ignorar conflitos de CSS
     if (isPdf) {
       pdfZone.style.display = 'block';
       textArea.style.display = 'none';
@@ -286,16 +303,13 @@ const ImportPanel = (() => {
 
   return {
     init: () => {
-      // Monitora os botões de rádio e aplica a visibilidade correta
       const radios = document.querySelectorAll('input[name="importMode"]');
       radios.forEach(radio => radio.addEventListener('change', updateInputVisibility));
-      
-      // Executa uma vez no início para garantir a tela correta
       updateInputVisibility();
 
       document.getElementById('pdfFileInput').addEventListener('change', async (e) => {
         const file = e.target.files[0]; if (!file) return;
-        TabManager.showToast("Lendo PDF...");
+        TabManager.showToast("Lendo PDF e estruturando frases...");
         try {
           const buffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -306,6 +320,12 @@ const ImportPanel = (() => {
             extractedText += content.items.map(it => it.str).join(" ") + "\n";
           }
           parseRawBuffer(extractedText);
+          
+          if (compiledSentences.length === 0) {
+            TabManager.showToast("Nenhuma frase encontrada no PDF.", 'error');
+            return;
+          }
+          
           TabManager.showToast(`${compiledSentences.length} frases mapeadas!`, 'success');
           
           if (!document.getElementById('moduleTitle').value) {
@@ -315,7 +335,6 @@ const ImportPanel = (() => {
           console.error(err);
           TabManager.showToast("Falha ao ler PDF.", 'error');
         }
-        // Reseta o input para permitir subir o mesmo arquivo de novo caso precise testar
         e.target.value = '';
       });
 
@@ -327,7 +346,7 @@ const ImportPanel = (() => {
         if (mode === 'text') {
           const enLines = document.getElementById('rawTextEn').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
           const ptLines = document.getElementById('rawTextPt').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
-          if (!enLines.length) return TabManager.showToast("Insira o bloco em inglês.", 'error');
+          if (!enLines.length) return TabManager.showToast("Insira as frases em inglês.", 'error');
           
           compiledSentences = enLines.map((en, idx) => ({ en, pt: ptLines[idx] || "Tradução pendente" }));
           compiledTextBlock = enLines.join(" ");
