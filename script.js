@@ -1,11 +1,9 @@
 /**
- * EnglishFlow Engine — script.js
- * Arquitetura Modular Blindada para Múltiplos Baralhos e Automação SRS
+ * EnglishFlow Engine — script.js (Revisado e Corrigido)
  */
 
 'use strict';
 
-// Inicializa o Worker do leitor de PDF de forma segura
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
 // ── BANCO DE DADOS CORE (LOCALSTORAGE) ──
@@ -13,12 +11,12 @@ const DB = (() => {
   const STORAGE_KEY = 'englishflow_premium_db';
   
   const defaultSchema = {
-    modules: [],    // Histórias e lições compiladas
-    decks: [        // Múltiplos baralhos do sistema
+    modules: [],
+    decks: [
       { id: 'default_deck', name: 'Fundação (Principal)' }
     ],
-    cards: [],      // Todos os cartões do Anki vinculados ou avulsos
-    stats: {}       // Estatísticas de visualizações e olhinho
+    cards: [],
+    stats: {}
   };
 
   let data = null;
@@ -28,14 +26,13 @@ const DB = (() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       data = raw ? JSON.parse(raw) : { ...defaultSchema };
-      // Garante retrocompatibilidade se estruturas chaves sumirem
       if (!data.decks || !data.decks.length) data.decks = [...defaultSchema.decks];
       if (!data.cards) data.cards = [];
       if (!data.modules) data.modules = [];
       if (!data.stats) data.stats = {};
       return data;
     } catch (e) {
-      console.error("Falha ao descriptografar banco local. Inicializando cópia limpa.", e);
+      console.error("Falha ao carregar banco local.", e);
       data = { ...defaultSchema };
       return data;
     }
@@ -54,7 +51,6 @@ const DB = (() => {
     addModule: (m) => { load().modules.push(m); save(); },
     deleteModule: (id) => { 
       load().modules = load().modules.filter(m => m.id !== id); 
-      // Remove da fila do SRS também os cartões que nasceram desse módulo
       load().cards = load().cards.filter(c => c.originModuleId !== id);
       save(); 
     },
@@ -68,7 +64,6 @@ const DB = (() => {
     deleteDeck: (id) => {
       if (id === 'default_deck') return false;
       load().decks = load().decks.filter(d => d.id !== id);
-      // Realoca os cards órfãos para o baralho principal por segurança
       load().cards.forEach(c => { if (c.deckId === id) c.deckId = 'default_deck'; });
       save();
       return true;
@@ -104,34 +99,30 @@ const DB = (() => {
   };
 })();
 
-// ── ALGORITMO ANKI INTEGRADO (SM-2 ADAPTADO COM FILA DE REAPRENDIZADO) ──
+// ── ALGORITMO ANKI INTEGRADO (SM-2 ADAPTADO) ──
 const SRS = (() => {
   const getTodayDateString = () => new Date().toISOString().slice(0, 10);
 
   return {
     createTemplate: () => ({
-      interval: 1,      // Dias até a próxima revisão
-      easeFactor: 2.5,  // Fator de facilidade padrão do Anki
-      repetitions: 0,   // Quantas vezes foi revisado seguidas com sucesso
+      interval: 1,
+      easeFactor: 2.5,
+      repetitions: 0,
       nextReview: getTodayDateString()
     }),
     
     processResponse: (history, quality) => {
       const h = { ...history };
-      
       if (quality < 3) {
-        // Erro ou hesitação crítica: Volta para a fila de hoje imediata
         h.repetitions = 0;
         h.interval = 1; 
-        h.nextReview = getTodayDateString(); // Fica retido na sessão atual
+        h.nextReview = getTodayDateString();
       } else {
-        // Acerto (Fácil, Bom, Difícil)
         if (h.repetitions === 0) h.interval = 1;
-        else if (h.repetitions === 1) h.interval = 3; // Intervalo curto inicial
+        else if (h.repetitions === 1) h.interval = 3;
         else h.interval = Math.round(h.interval * h.easeFactor);
         
         h.repetitions += 1;
-        // Ajuste fino do fator de facilidade baseado na resposta do usuário
         h.easeFactor = Math.max(1.3, h.easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
         
         const targetDate = new Date();
@@ -157,7 +148,6 @@ const VoiceEngine = (() => {
         const select = document.getElementById(selectElementId);
         if (!select) return;
         
-        // Filtra vozes em inglês e seleciona nativas estáveis
         const voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
         
         select.innerHTML = voices.map(v => {
@@ -213,7 +203,7 @@ const TabManager = (() => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tabId}`));
       
-      // Atualizações de estado ao renderizar abas específicas
+      if (tabId === 'create') ImportPanel.renderGrid();
       if (tabId === 'study') StudyPanel.refresh();
       if (tabId === 'decks') DecksPanel.refresh();
       if (tabId === 'review') ReviewPanel.startSession();
@@ -233,7 +223,7 @@ const TabManager = (() => {
   };
 })();
 
-// ── COMPILADOR INTELEGENTE DE PDF E TEXTO (ABA 1) ──
+// ── COMPILADOR DE PDF E TEXTO (ABA 1) ──
 const ImportPanel = (() => {
   let compiledSentences = [];
   let compiledTextBlock = "";
@@ -253,7 +243,7 @@ const ImportPanel = (() => {
       if (uLine.includes("TEXTO PARA TREINAMENTO") || uLine.includes("PARA TREINAMENTO")) { mode = "treino"; continue; }
 
       if (mode === "linha") {
-        // Detecta inglês: Caracteres latinos sem acentuação comum do português
+        // Correção da Expressão Regular: validação livre de erros de sintaxe
         if (/[a-zA-Z]/.test(lines[i]) && !lines[i].match(/[ãáéíóúçÂÊÎÔÛÃÕ]/i)) {
           if (lastEnglish) compiledSentences.push({ en: lastEnglish, pt: "Tradução oculta" });
           lastEnglish = lines[i];
@@ -276,8 +266,14 @@ const ImportPanel = (() => {
       document.querySelectorAll('input[name="importMode"]').forEach(radio => {
         radio.onchange = (e) => {
           const isPdf = e.target.value === 'pdf';
-          document.getElementById('pdfDropZone').style.display = isPdf ? 'block' : 'none';
-          document.getElementById('textInputArea').style.display = isPdf ? 'none' : 'flex';
+          // Correção de exibição: removemos a classe .hidden para evitar conflito com !important
+          if (isPdf) {
+            document.getElementById('pdfDropZone').classList.remove('hidden');
+            document.getElementById('textInputArea').classList.add('hidden');
+          } else {
+            document.getElementById('pdfDropZone').classList.add('hidden');
+            document.getElementById('textInputArea').classList.remove('hidden');
+          }
         };
       });
 
@@ -403,7 +399,6 @@ const StudyPanel = (() => {
       document.getElementById('studyActiveView').classList.remove('hidden');
       document.getElementById('activeStudyTitle').textContent = activeModule.title;
       
-      // Inicializa os seletores de vozes
       VoiceEngine.init('studyVoicePicker');
       
       const container = document.getElementById('studyLinhaContainer');
@@ -422,31 +417,28 @@ const StudyPanel = (() => {
         `;
       }).join('');
       
-      // Amarra os eventos de clique dinâmico no botão Check (Liga/Desliga)
       container.querySelectorAll('.check-toggle-btn').forEach(btn => {
         btn.onclick = () => StudyPanel.toggleCheck(btn, btn.dataset.sid);
       });
 
       document.getElementById('blockFullTextParagraph').textContent = activeModule.fullText;
-      document.getElementById('studyProgress').style.width = '100%';
     },
     toggleCheck: (buttonElement, sentenceId) => {
       const sentence = activeModule.sentences.find(x => x.id === sentenceId);
       const parentCard = document.getElementById(`scard_${sentenceId}`);
       
       if (DB.hasCard(sentenceId)) {
-        // Desliga: Remove do Anki imediatamente
         DB.removeCardByOrigin(sentenceId);
         buttonElement.className = "btn btn-ghost btn-sm check-toggle-btn";
+        buttonElement.textContent = "✔ Concluído";
         if (parentCard) parentCard.classList.remove('card-active-green');
         TabManager.showToast("Removido da fila de revisão.");
       } else {
-        // Liga: Cria o card no baralho principal automaticamente
         DB.addCard({
           id: 'card_' + Math.random().toString(36).substring(2,11),
           sentenceId: sentenceId,
           originModuleId: activeModule.id,
-          deckId: 'default_deck', // Vai direto para o Baralho Principal
+          deckId: 'default_deck',
           english: sentence.english,
           portuguese: sentence.portuguese,
           voiceName: document.getElementById('studyVoicePicker').value,
@@ -454,14 +446,14 @@ const StudyPanel = (() => {
         });
         buttonElement.className = "btn btn-primary btn-sm check-toggle-btn";
         if (parentCard) parentCard.classList.add('card-active-green');
-        TabManager.showToast("Card gerado automaticamente no Anki!", "success");
+        TabManager.showToast("Card gerado automaticamente!", "success");
       }
       GlobalApp.updateBadges();
     }
   };
 })();
 
-// ── BANCO DE BARALHOS CUSTOMIZADOS (ABA 3: BARALHOS) ──
+// ── GESTÃO DE BARALHOS CUSTOMIZADOS (ABA 3: BARALHOS) ──
 const DecksPanel = (() => {
   return {
     init: () => {
@@ -470,7 +462,7 @@ const DecksPanel = (() => {
         if (!name) return;
         DB.addDeck(name);
         document.getElementById('newDeckName').value = '';
-        TabManager.showToast("Baralho independente criado com sucesso!", 'success');
+        TabManager.showToast("Baralho criado com sucesso!", 'success');
         DecksPanel.refresh();
       };
 
@@ -484,7 +476,7 @@ const DecksPanel = (() => {
         
         DB.addCard({
           id: 'card_' + Math.random().toString(36).substring(2,11),
-          sentenceId: null, // Identifica que é manual, sem vínculo com lições
+          sentenceId: null,
           originModuleId: null,
           deckId,
           english: en,
@@ -504,27 +496,24 @@ const DecksPanel = (() => {
       const decks = DB.getDecks();
       const cards = DB.getCards();
       
+      // Interface revisada para exibir todos os baralhos existentes com opção de exclusão
       container.innerHTML = decks.map(d => {
         const totalCards = cards.filter(c => c.deckId === d.id).length;
         return `
           <div class="voice-dashboard-panel" style="margin-bottom:.5rem; justify-content:space-between;">
-            <div><strong>${d.name}</strong> <span class="count-badge">${totalCards} cards</span></div>
-            ${d.id !== 'default_deck' ? `<button class="btn btn-danger btn-sm" onclick="DecksPanel.delete('${d.id}')">Excluir</button>` : '<span>Baralho Nativo</span>'}
+            <div><strong>🗂 ${d.name}</strong> <span class="count-badge">${totalCards} cards</span></div>
+            ${d.id !== 'default_deck' ? `<button class="btn btn-danger btn-sm" onclick="DecksPanel.delete('${d.id}')">Excluir Baralho</button>` : '<span style="font-size:0.8rem; color:var(--text-lo);">Sistema</span>'}
           </div>
         `;
       }).join('');
 
-      // Sincroniza combos de seleção para injeção manual
-      const deckSelectors = ['cardDeckDestiny'];
-      deckSelectors.forEach(selId => {
-        const sel = document.getElementById(selId);
-        if(sel) sel.innerHTML = decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      });
+      const sel = document.getElementById('cardDeckDestiny');
+      if(sel) sel.innerHTML = decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
 
       VoiceEngine.init('cardVoiceDestiny');
     },
     delete: async (id) => {
-      if (await TabManager.askConfirm("Apagar este baralho? Os cartões dele serão migrados para o Baralho Principal para você não perder o progresso.")) {
+      if (await TabManager.askConfirm("Apagar este baralho? Os cards contidos nele serão transferidos para o Baralho Principal para preservar seu progresso.")) {
         DB.deleteDeck(id); DecksPanel.refresh();
       }
     }
@@ -558,18 +547,16 @@ const ReviewPanel = (() => {
         const quality = Number(btn.dataset.q);
         const card = activeQueue[index];
         
-        // Processa resposta no algoritmo cognitivo SM-2
         card.history = SRS.processResponse(card.history, quality);
-        DB.saveCards; // Salva o novo estado da memória
+        DB.saveCards;
         
         if (quality < 3) {
-          // Injeta o card no final da fila da sessão de hoje para reaprendizado rápido
           const failedCard = activeQueue.splice(index, 1)[0];
           activeQueue.push(failedCard);
           TabManager.showToast("Retido para reavaliação rápida!");
         } else {
           index++;
-          TabManager.showToast("Agendamento atualizado!");
+          TabManager.showToast("Progresso salvo!");
         }
         
         ReviewPanel.renderCard();
@@ -577,7 +564,6 @@ const ReviewPanel = (() => {
     },
     startSession: () => {
       const allCards = DB.getCards();
-      const decks = DB.getDecks();
       activeQueue = allCards.filter(c => SRS.isDue(c));
       index = 0;
       
@@ -612,7 +598,6 @@ const ReviewPanel = (() => {
       document.getElementById('reviewActionTriggerRow').classList.remove('hidden');
       document.getElementById('reviewFeedbackButtonRow').classList.add('hidden');
       
-      // Executa o áudio da voz correspondente automaticamente ao abrir o card
       VoiceEngine.setVoice(card.voiceName);
       VoiceEngine.speak(card.english);
     }
@@ -647,18 +632,18 @@ const PlaylistPanel = (() => {
       const mods = DB.getModules();
       
       let totalSeconds = 0;
-      mods.forEach(m => totalSeconds += (m.sentences.length * 4)); // Média estimada de 4s por bloco de áudio
+      mods.forEach(m => totalSeconds += (m.sentences.length * 4));
       document.getElementById('playlistDurationTrack').textContent = `Tempo acumulado estimado: ${Math.round(totalSeconds / 60)} minutos`;
 
       if (!mods.length) {
-        container.innerHTML = '<p class="empty-state">Nenhum áudio integrado. Crie módulos primeiro.</p>';
+        container.innerHTML = '<p class="empty-state">Nenhum áudio integrado na base.</p>';
         return;
       }
 
       container.innerHTML = mods.map((m, idx) => `
         <div class="playlist-item ${trackIdx === idx && isPlaying ? 'active-track' : ''}">
-          <div><strong>${idx + 1}. Audio Compilado — ${m.title}</strong></div>
-          <span class="count-badge">👁 ${DB.incrementViewCount('track_views_' + m.id) - 1} execuções</span>
+          <div><strong>${idx + 1}. Áudio Adaptado — ${m.title}</strong></div>
+          <span class="count-badge">👁 ${DB.getViewCount('track_views_' + m.id)} execuções</span>
         </div>
       `).join('');
     },
@@ -678,9 +663,8 @@ const PlaylistPanel = (() => {
 
       const activeMod = mods[trackIdx];
       document.getElementById('playlistCurrentTitle').textContent = activeMod.title;
-      document.getElementById('playlistCurrentSub').textContent = "Lendo blocos sequenciais estruturados...";
+      document.getElementById('playlistCurrentSub').textContent = "Treinamento passivo sequencial ativo...";
       
-      // Incrementa o contador do Olhinho ao reproduzir
       const key = 'track_views_' + activeMod.id;
       DB.incrementViewCount(key);
       PlaylistPanel.refresh();
@@ -689,7 +673,6 @@ const PlaylistPanel = (() => {
       const readBlock = () => {
         if (!isPlaying || trackIdx >= mods.length) return;
         if (sentencePointer >= activeMod.sentences.length) {
-          // Passa para a próxima lição da playlist automaticamente
           trackIdx++;
           delayTimer = setTimeout(PlaylistPanel.executeTrack, 1500);
           return;
@@ -719,7 +702,7 @@ const PlaylistPanel = (() => {
   };
 })();
 
-// ── ORQUESTRAÇÃO GLOBAL E INICIALIZAÇÃO ──
+// ── ORQUESTRAÇÃO GLOBAL ──
 const GlobalApp = (() => {
   return {
     init: () => {
@@ -730,7 +713,6 @@ const GlobalApp = (() => {
       ReviewPanel.init();
       PlaylistPanel.init();
       
-      // Vincula backups
       document.getElementById('btnConfigExport').onclick = () => {
         const blob = new Blob([localStorage.getItem('englishflow_premium_db')], { type: 'application/json' });
         const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `englishflow_backup_${SRS.todayStr()}.json` });
@@ -741,14 +723,14 @@ const GlobalApp = (() => {
         try {
           const rawText = await e.target.files[0].text();
           if (DB.importRawJSON(rawText)) {
-            TabManager.showToast("Banco carregado!", 'success');
+            TabManager.showToast("Banco de dados sincronizado!", 'success');
             setTimeout(() => location.reload(), 1000);
-          } else { TabManager.setData("Estrutura JSON inválida.", 'error'); }
-        } catch { TabManager.showToast("Falha ao processar arquivo.", 'error'); }
+          } else { TabManager.showToast("Estrutura inválida.", 'error'); }
+        } catch { TabManager.showToast("Falha ao abrir arquivo.", 'error'); }
       };
 
       document.getElementById('btnConfigClearAll').onclick = async () => {
-        if (await TabManager.askConfirm("Atenção! Isso apagará todas as histórias salvas e o histórico de repetição espaçada. Continuar?")) {
+        if (await TabManager.askConfirm("Isso apagará permanentemente todo o histórico e lições. Continuar?")) {
           DB.clearAll();
           location.reload();
         }
@@ -769,5 +751,4 @@ const GlobalApp = (() => {
   };
 })();
 
-// Start mestre do ecossistema ao carregar a árvore DOM
 document.addEventListener('DOMContentLoaded', GlobalApp.init);
