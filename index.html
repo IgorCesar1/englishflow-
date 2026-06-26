@@ -1,46 +1,84 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EnglishFlow — Input Compreensível</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EnglishFlow | Input Compreensível</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand">⟡ EnglishFlow</div>
-    <nav class="tab-nav">
-      <button class="tab-btn active" data-tab="create">✦ Criar</button>
-      <button class="tab-btn" data-tab="study">▶ Estudar</button>
-      <button class="tab-btn" data-tab="review">◈ Revisão <span id="review-badge" class="hidden">0</span></button>
-      <button class="tab-btn" data-tab="playlist">♫ Playlist</button>
-      <button class="tab-btn" data-tab="config">⚙ Config</button>
+    <nav class="navbar">
+        <div class="logo">English<span>Flow</span></div>
+        <div class="nav-links">
+            <button onclick="showSection('upload-section')">Novo Texto</button>
+            <button onclick="showSection('library-section')">Biblioteca</button>
+            <button onclick="showSection('review-section')" id="review-badge-btn">Revisões <span id="review-count">0</span></button>
+        </div>
     </nav>
-  </header>
 
-  <main class="app-main">
-    <section id="tab-create" class="tab-panel active">
-        <h2>Processador de Conteúdo</h2>
-        <form id="mainCreateForm">
-            <input type="text" id="moduleTitle" placeholder="Nome do Módulo">
-            <div class="options">
-                <label><input type="radio" name="importMode" value="pdf" checked> PDF</label>
-                <label><input type="radio" name="importMode" value="text"> Texto</label>
-            </div>
-            <div id="pdfDropZone"><input type="file" id="pdfFileInput" accept=".pdf"></div>
-            <div id="textInputArea" class="hidden">
-                <textarea id="rawTextEn" placeholder="Inglês"></textarea>
-                <textarea id="rawTextPt" placeholder="Português"></textarea>
-            </div>
-            <button type="button" id="btnProcessModule" class="btn">Processar</button>
-        </form>
-        <div id="compiledModulesGrid"></div>
-    </section>
-    <!-- As outras seções (study, review, etc) seguem este padrão -->
-  </main>
+    <main class="container">
+        <!-- SEÇÃO: UPLOAD / CRIAÇÃO -->
+        <section id="upload-section" class="app-section">
+            <div class="card">
+                <h2>Importar Conteúdo</h2>
+                <div class="toggle-container">
+                    <button class="toggle-btn active" id="btn-pdf" onclick="toggleInputMethod('pdf')">PDF (CIMV)</button>
+                    <button class="toggle-btn" id="btn-raw" onclick="toggleInputMethod('raw')">Texto Bruto</button>
+                </div>
 
-  <div id="toast" class="toast"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-  <script src="script.js"></script>
+                <div id="input-pdf" class="input-group">
+                    <p class="hint">Selecione o PDF do Mairo Vergara (Jack Hannaford, etc.)</p>
+                    <input type="file" id="pdf-file" accept=".pdf">
+                </div>
+
+                <div id="input-raw" class="input-group" style="display: none;">
+                    <input type="text" id="raw-title" placeholder="Título da Lição">
+                    <textarea id="raw-text" placeholder="Cole o texto linha a linha aqui (Inglês em uma linha, Português na outra)"></textarea>
+                </div>
+
+                <button class="btn-primary" id="process-btn">Processar e Salvar</button>
+                <div id="status-msg"></div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: BIBLIOTECA -->
+        <section id="library-section" class="app-section" style="display: none;">
+            <h2>Minhas Lições</h2>
+            <div id="lessons-list" class="grid-list">
+                <!-- Lições inseridas via JS -->
+            </div>
+        </section>
+
+        <!-- SEÇÃO: ESTUDO (LINHA A LINHA) -->
+        <section id="study-section" class="app-section" style="display: none;">
+            <div class="study-header">
+                <button class="btn-text" onclick="showSection('library-section')">← Voltar</button>
+                <h2 id="study-title">Lição</h2>
+            </div>
+            
+            <div class="study-container">
+                <div id="line-by-line-content">
+                    <!-- Conteúdo gerado via JS -->
+                </div>
+                
+                <div class="training-text-box">
+                    <h3>Texto para Treinamento</h3>
+                    <div id="training-text-content"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: REVISÃO (SRS) -->
+        <section id="review-section" class="app-section" style="display: none;">
+            <h2>Revisão Espaçada (SRS)</h2>
+            <div id="srs-card-container" class="card review-card">
+                <!-- Card de revisão via JS -->
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
 </body>
 </html>
