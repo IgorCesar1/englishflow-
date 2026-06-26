@@ -1,47 +1,198 @@
-/* EnglishFlow v3 — style.css */
-
 :root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface-2: #1c2430;
-  --accent: #6c8bef;
-  --text-hi: #e6edf3;
-  --text-md: #8b96a4;
-  --border: #2a3444;
-  --red: #f85149;
-  --green: #3fb950;
+    --bg-dark: #0f172a;
+    --card-bg: #1e293b;
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --accent: #38bdf8;
+    --accent-hover: #0ea5e9;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --warning: #f59e0b;
 }
 
-body { font-family: sans-serif; background: var(--bg); color: var(--text-hi); margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
-/* ── Layout da Interface ── */
-.app-header { display: flex; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center; }
-.tab-nav { display: flex; gap: 1rem; margin-left: 2rem; }
-.tab-btn { background: none; border: none; color: var(--text-md); cursor: pointer; padding: 0.5rem; }
-.tab-btn.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
-
-.tab-panel { display: none; padding: 2rem; }
-.tab-panel.active { display: block; }
-
-/* ── Formulário e Entradas ── */
-.create-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
-textarea, input { 
-  background: var(--surface-2); border: 1px solid var(--border); 
-  color: var(--text-hi); padding: 0.8rem; border-radius: 4px; width: 100%; 
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    line-height: 1.6;
 }
 
-/* ── Correção da Visibilidade (O problema que você relatou) ── */
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+/* Navbar */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: #020617;
+    border-bottom: 1px solid #334155;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo { font-size: 1.5rem; font-weight: bold; }
+.logo span { color: var(--accent); }
+
+.nav-links button {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    margin-left: 15px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: 0.3s;
+}
+
+.nav-links button:hover { color: var(--accent); }
+
+#review-badge-btn span {
+    background: var(--danger);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+}
+
+/* Cards e Layout */
+.card {
+    background: var(--card-bg);
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    margin-bottom: 20px;
+}
+
+.grid-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.lesson-item {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.lesson-item:hover { border-color: var(--accent); transform: translateY(-3px); }
+
+/* Inputs */
+.toggle-container {
+    display: flex;
+    background: #0f172a;
+    padding: 5px;
+    border-radius: 8px;
+    margin: 1.5rem 0;
+}
+
+.toggle-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.toggle-btn.active {
+    background: var(--accent);
+    color: white;
+}
+
+input, textarea {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: white;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    border: none;
+    color: white;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+
+/* Estudo Linha a Linha */
+.study-line {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border-left: 4px solid #334155;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.study-line.active-srs { border-left-color: var(--success); }
+
+.line-content .en { font-size: 1.1rem; color: var(--accent); font-weight: 500; display: block; }
+.line-content .pt { font-size: 0.95rem; color: var(--text-dim); }
+
+.line-actions button {
+    background: #334155;
+    border: none;
+    color: white;
+    padding: 8px;
+    margin-left: 5px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.training-text-box {
+    margin-top: 30px;
+    padding: 20px;
+    background: #0f172a;
+    border-radius: 8px;
+    white-space: pre-wrap;
+}
+
+/* SRS Card */
+.review-card {
+    text-align: center;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.srs-front { font-size: 1.5rem; margin-bottom: 20px; }
+.srs-back { color: var(--text-dim); margin-bottom: 30px; border-top: 1px solid #334155; padding-top: 20px; }
+
+.srs-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.srs-buttons button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+}
+
+.btn-err { background: var(--danger); }
+.btn-hard { background: var(--warning); }
+.btn-good { background: var(--accent); }
+.btn-easy { background: var(--success); }
+
 .hidden { display: none !important; }
-
-/* ── Estilização de Módulos ── */
-.modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
-.module-card { background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border); }
-
-/* ── Botões e Toasts ── */
-.btn { padding: 0.8rem 1.5rem; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; }
-.toast { 
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
-  padding: 1rem 2rem; background: var(--surface-2); border: 1px solid var(--accent); 
-  border-radius: 20px; display: none; 
-}
-.toast.show { display: block; }
