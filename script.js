@@ -1,559 +1,285 @@
-/**
- * EnglishFlow Engine — script.js (Engine Definitiva CIMV e Correção de UI)
- */
 
-'use strict';
+cat > /mnt/user-data/outputs/english-srs-app/style.css << 'EOF'
+/* EnglishFlow v3 — style.css
+   Paleta idêntica + novos componentes: sub-tabs, check-btn,
+   training-text, accent-selector, deck-list, requeue-badge */
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+:root {
+  --bg:          #0d1117;
+  --surface:     #161b22;
+  --surface-2:   #1c2430;
+  --surface-3:   #232d3a;
+  --border:      #2a3444;
+  --border-2:    #384558;
+  --accent:      #6c8bef;
+  --accent-dim:  #3d5299;
+  --accent-glow: rgba(108,139,239,.18);
+  --text-hi:     #e6edf3;
+  --text-md:     #8b96a4;
+  --text-lo:     #4d5b6b;
+  --green:       #3fb950;
+  --yellow:      #d29922;
+  --red:         #f85149;
+  --orange:      #e3812b;
+  --font: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", "Fira Code", monospace;
+  --r-sm:4px; --r-md:10px; --r-lg:16px; --r-xl:24px;
+  --ease: cubic-bezier(.25,.8,.25,1);
+}
 
-// ── BANCO DE DADOS CORE (LOCALSTORAGE) ──
-const DB = (() => {
-  const STORAGE_KEY = 'englishflow_premium_db';
-  
-  const defaultSchema = {
-    modules: [],
-    decks: [{ id: 'default_deck', name: 'Fundação (Principal)' }],
-    cards: [],
-    stats: {}
-  };
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text-hi);min-height:100dvh;line-height:1.6;-webkit-font-smoothing:antialiased}
+input,textarea,select,button{font-family:inherit}
+button{cursor:pointer;border:none;background:none}
+textarea{resize:vertical}
 
-  let data = null;
+/* ── Header ── */
+.app-header{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:1.25rem;padding:.7rem 1.5rem;background:rgba(13,17,23,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:.45rem;flex-shrink:0}
+.brand-icon{font-size:1.25rem;color:var(--accent)}
+.brand-name{font-size:.95rem;font-weight:700;letter-spacing:-.02em}
+.tab-nav{display:flex;gap:.2rem;flex:1;overflow-x:auto;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{display:inline-flex;align-items:center;gap:.3rem;padding:.42rem .85rem;border-radius:var(--r-sm);font-size:.8rem;font-weight:500;color:var(--text-md);white-space:nowrap;transition:color .2s,background .2s}
+.tab-btn:hover{color:var(--text-hi);background:var(--surface-2)}
+.tab-btn.active{color:var(--accent);background:var(--accent-glow)}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;background:var(--red);color:#fff;border-radius:20px;font-size:.65rem;font-weight:700;transition:transform .3s,opacity .3s}
+.tab-badge[data-count="0"]{opacity:0;transform:scale(0)}
+.stat-badge{flex-shrink:0;display:inline-block;padding:.22rem .65rem;background:var(--accent-glow);color:var(--accent);border:1px solid var(--accent-dim);border-radius:20px;font-size:.76rem;font-weight:600}
 
-  const load = () => {
-    if (data) return data;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      data = raw ? JSON.parse(raw) : { ...defaultSchema };
-      if (!data.decks || !data.decks.length) data.decks = [...defaultSchema.decks];
-      if (!data.cards) data.cards = [];
-      if (!data.modules) data.modules = [];
-      if (!data.stats) data.stats = {};
-      return data;
-    } catch (e) {
-      console.error("Falha ao carregar banco local.", e);
-      data = { ...defaultSchema };
-      return data;
-    }
-  };
+/* ── Layout ── */
+.app-main{max-width:960px;margin:0 auto;padding:2rem 1.5rem 5rem}
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeIn .22s var(--ease)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.panel-header{margin-bottom:1.75rem}
+.panel-header h2{font-size:1.45rem;font-weight:700;letter-spacing:-.03em}
+.panel-sub{color:var(--text-md);font-size:.86rem;margin-top:.3rem}
 
-  const save = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); };
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:.38rem;padding:.58rem 1.15rem;border-radius:var(--r-md);font-size:.86rem;font-weight:600;transition:all .14s var(--ease);border:1px solid transparent;line-height:1}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:#7d9cf5}
+.btn-secondary{background:var(--surface-3);color:var(--text-hi);border-color:var(--border-2)}
+.btn-secondary:hover{background:var(--border-2)}
+.btn-ghost{background:transparent;color:var(--text-md);border-color:var(--border)}
+.btn-ghost:hover{color:var(--text-hi);border-color:var(--border-2);background:var(--surface-2)}
+.btn-accent{background:var(--accent-glow);color:var(--accent);border-color:var(--accent-dim)}
+.btn-accent:hover{background:rgba(108,139,239,.3)}
+.btn-danger{background:rgba(248,81,73,.12);color:var(--red);border-color:var(--red)}
+.btn-danger:hover{background:rgba(248,81,73,.25)}
+.btn-sm{padding:.38rem .75rem;font-size:.78rem}
+.btn-feedback{padding:.52rem 1rem;border-radius:var(--r-md);font-size:.83rem;border:1px solid;display:inline-flex;flex-direction:column;align-items:center;gap:.1rem}
+.btn-feedback small{font-size:.65rem;opacity:.7}
+.btn-again{color:var(--red);border-color:var(--red);background:rgba(248,81,73,.1)}
+.btn-again:hover{background:rgba(248,81,73,.25)}
+.btn-hard{color:var(--orange);border-color:var(--orange);background:rgba(227,129,43,.1)}
+.btn-hard:hover{background:rgba(227,129,43,.25)}
+.btn-good{color:var(--yellow);border-color:var(--yellow);background:rgba(210,153,34,.1)}
+.btn-good:hover{background:rgba(210,153,34,.25)}
+.btn-easy{color:var(--green);border-color:var(--green);background:rgba(63,185,80,.1)}
+.btn-easy:hover{background:rgba(63,185,80,.25)}
 
-  return {
-    getModules: () => load().modules,
-    getDecks: () => load().decks,
-    getCards: () => load().cards,
-    getStats: () => load().stats,
-    addModule: (m) => { load().modules.push(m); save(); },
-    deleteModule: (id) => { 
-      load().modules = load().modules.filter(m => m.id !== id); 
-      load().cards = load().cards.filter(c => c.originModuleId !== id);
-      save(); 
-    },
-    addDeck: (name) => {
-      const id = 'deck_' + Math.random().toString(36).substring(2, 11);
-      load().decks.push({ id, name }); save(); return id;
-    },
-    deleteDeck: (id) => {
-      if (id === 'default_deck') return false;
-      load().decks = load().decks.filter(d => d.id !== id);
-      load().cards.forEach(c => { if (c.deckId === id) c.deckId = 'default_deck'; });
-      save(); return true;
-    },
-    addCard: (card) => { load().cards.push(card); save(); },
-    removeCardByOrigin: (sentenceId) => {
-      load().cards = load().cards.filter(c => c.sentenceId !== sentenceId); save();
-    },
-    hasCard: (sentenceId) => load().cards.some(c => c.sentenceId === sentenceId),
-    incrementViewCount: (audioKey) => {
-      const s = load().stats; s[audioKey] = (s[audioKey] || 0) + 1; save(); return s[audioKey];
-    },
-    getViewCount: (audioKey) => load().stats[audioKey] || 0,
-    importRawJSON: (jsonString) => {
-      try {
-        const parsed = JSON.parse(jsonString);
-        if (parsed.decks && parsed.cards) { localStorage.setItem(STORAGE_KEY, jsonString); data = parsed; return true; }
-      } catch {} return false;
-    },
-    clearAll: () => { localStorage.removeItem(STORAGE_KEY); data = null; load(); }
-  };
-})();
+/* ── PDF Drop Zone ── */
+.pdf-drop-zone{position:relative;border:2px dashed var(--accent-dim);border-radius:var(--r-xl);padding:2.2rem 2rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--accent-glow);margin-bottom:.75rem}
+.pdf-drop-zone:hover,.pdf-drop-zone.dragging{border-color:var(--accent);background:rgba(108,139,239,.26)}
+.pdf-drop-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.pdf-drop-icon{font-size:2.2rem;margin-bottom:.6rem}
+.pdf-drop-title{font-size:1rem;font-weight:700;margin-bottom:.25rem}
+.pdf-drop-sub{font-size:.82rem;color:var(--text-md)}
+.pdf-status{padding:.55rem 1rem;border-radius:var(--r-md);font-size:.85rem;background:var(--surface-2);border:1px solid var(--border);color:var(--text-md);margin-bottom:1rem}
+.pdf-status.loading{color:var(--accent);border-color:var(--accent-dim)}
+.pdf-status.success{color:var(--green);border-color:var(--green)}
+.pdf-status.error{color:var(--red);border-color:var(--red)}
 
-// ── ALGORITMO ANKI INTEGRADO ──
-const SRS = (() => {
-  const getTodayDateString = () => new Date().toISOString().slice(0, 10);
-  return {
-    createTemplate: () => ({ interval: 1, easeFactor: 2.5, repetitions: 0, nextReview: getTodayDateString() }),
-    processResponse: (history, quality) => {
-      const h = { ...history };
-      if (quality < 3) {
-        h.repetitions = 0; h.interval = 1; h.nextReview = getTodayDateString();
-      } else {
-        if (h.repetitions === 0) h.interval = 1;
-        else if (h.repetitions === 1) h.interval = 3;
-        else h.interval = Math.round(h.interval * h.easeFactor);
-        h.repetitions += 1;
-        h.easeFactor = Math.max(1.3, h.easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-        const targetDate = new Date(); targetDate.setDate(targetDate.getDate() + h.interval);
-        h.nextReview = targetDate.toISOString().slice(0, 10);
-      }
-      return h;
-    },
-    isDue: (card) => card.history.nextReview <= getTodayDateString(),
-    todayStr: getTodayDateString
-  };
-})();
+/* ── PDF Preview ── */
+.pdf-preview{background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-xl);padding:1.4rem;margin-bottom:1.5rem;animation:fadeIn .3s}
+.preview-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem}
+.preview-header h3{font-size:.95rem;font-weight:700}
+.preview-header > div{display:flex;gap:.5rem}
+#previewModules{display:flex;flex-direction:column;gap:.7rem;max-height:320px;overflow-y:auto}
+.preview-mod{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:.9rem}
+.preview-mod-title{font-weight:700;font-size:.88rem;margin-bottom:.3rem}
+.preview-mod-meta{font-size:.75rem;color:var(--text-md);margin-bottom:.55rem}
+.preview-pair{padding:.28rem 0;border-bottom:1px solid var(--border);font-size:.8rem}
+.preview-pair:last-child{border-bottom:none}
+.preview-pair .pen{color:var(--text-hi)}
+.preview-pair .ppt{color:var(--accent);font-size:.75rem}
+.preview-training{margin-top:.6rem;padding:.5rem;background:var(--surface-3);border-radius:var(--r-sm);font-size:.78rem;color:var(--text-md);font-style:italic;max-height:60px;overflow:hidden;text-overflow:ellipsis}
 
-// ── ENGINE DE VOZES ──
-const VoiceEngine = (() => {
-  const synth = window.speechSynthesis;
-  let activeVoiceName = '';
-  let activeRate = 0.75;
-  return {
-    init: (selectElementId, callback) => {
-      const populate = () => {
-        const select = document.getElementById(selectElementId); if (!select) return;
-        const voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
-        select.innerHTML = voices.map(v => {
-          let badge = "Nativo";
-          if (v.lang === "en-US") badge = "Americano 🇺🇸";
-          if (v.lang === "en-GB") badge = "Britânico 🇬🇧";
-          if (v.lang === "en-AU") badge = "Australiano 🇦🇺";
-          return `<option value="${v.name}">${v.name} (${badge})</option>`;
-        }).join('');
-        if (voices.length && !activeVoiceName) activeVoiceName = voices[0].name;
-        if (callback) callback(voices);
-      };
-      populate(); if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = populate;
-    },
-    setVoice: (name) => { activeVoiceName = name; },
-    setRate: (rate) => { activeRate = Number(rate); },
-    speak: (text, onEndCallback) => {
-      synth.cancel(); if (!text) return;
-      const utterance = new SpeechSynthesisUtterance(text);
-      const matched = synth.getVoices().find(v => v.name === activeVoiceName);
-      if (matched) utterance.voice = matched;
-      utterance.rate = activeRate;
-      if (onEndCallback) utterance.onend = onEndCallback;
-      synth.speak(utterance);
-    },
-    stop: () => synth.cancel()
-  };
-})();
+/* ── Divider ── */
+.divider-or{display:flex;align-items:center;gap:1rem;margin:1.75rem 0 1.4rem;color:var(--text-lo);font-size:.8rem}
+.divider-or::before,.divider-or::after{content:'';flex:1;height:1px;background:var(--border)}
 
-// ── GERENCIADOR DE UI ──
-const TabManager = (() => {
-  const toast = document.getElementById('toast');
-  const confirmModal = document.getElementById('confirmModal');
-  const confirmMsg = document.getElementById('confirmModalMsg');
-  let confirmResolver = null;
-  return {
-    init: () => {
-      document.querySelectorAll('.tab-btn').forEach(btn => { btn.onclick = () => TabManager.switchTab(btn.dataset.tab); });
-      document.getElementById('btnConfirmCancel').onclick = () => { confirmModal.classList.add('hidden'); if(confirmResolver) confirmResolver(false); };
-      document.getElementById('btnConfirmOk').onclick = () => { confirmModal.classList.add('hidden'); if(confirmResolver) confirmResolver(true); };
-    },
-    switchTab: (tabId) => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tabId}`));
-      if (tabId === 'create') ImportPanel.renderGrid();
-      if (tabId === 'study') StudyPanel.refresh();
-      if (tabId === 'decks') DecksPanel.refresh();
-      if (tabId === 'review') ReviewPanel.startSession();
-      if (tabId === 'playlist') PlaylistPanel.refresh();
-      GlobalApp.updateBadges();
-    },
-    showToast: (msg, mode = '') => {
-      toast.textContent = msg; toast.className = `toast show ${mode}`;
-      setTimeout(() => toast.classList.remove('show'), 2500);
-    },
-    askConfirm: (msg) => new Promise(resolve => {
-      confirmMsg.textContent = msg; confirmModal.classList.remove('hidden'); confirmResolver = resolve;
-    })
-  };
-})();
+/* ── Forms ── */
+.create-form,.anki-form{display:flex;flex-direction:column;gap:1.1rem}
+.form-group{display:flex;flex-direction:column;gap:.38rem}
+.form-group label{font-size:.78rem;font-weight:600;color:var(--text-md);text-transform:uppercase;letter-spacing:.05em}
+.form-row{display:flex;gap:1rem}
+.flex-1{flex:1}
+input[type="text"],textarea,select.select-control{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-hi);padding:.65rem .95rem;font-size:.88rem;width:100%;transition:border-color .2s}
+input[type="text"]:focus,textarea:focus,select.select-control:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+input::placeholder,textarea::placeholder{color:var(--text-lo)}
+.anki-section{margin-top:2.8rem;padding:1.4rem;border:1px dashed var(--border);border-radius:var(--r-xl);background:var(--surface)}
+.anki-section h3{font-size:.95rem;font-weight:700;margin-bottom:.35rem}
 
-// ── ABA 1: IMPORTAÇÃO BLINDADA COM ALGORITMO CIMV ──
-const ImportPanel = (() => {
-  let compiledSentences = [];
-  let compiledTextBlock = "";
+/* ── Modules grid ── */
+.modules-list-section{margin-top:2.5rem}
+.modules-list-section h3{font-size:.95rem;font-weight:700;margin-bottom:.9rem}
+.modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.9rem}
+.module-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.1rem;transition:border-color .2s,transform .2s}
+.module-card:hover{border-color:var(--accent-dim);transform:translateY(-2px)}
+.mc-title{font-weight:700;font-size:.9rem;margin-bottom:.3rem}
+.mc-meta{font-size:.75rem;color:var(--text-md)}
+.mc-due{font-size:.73rem;color:var(--red);font-weight:600;margin-top:.2rem}
+.mc-checked{font-size:.73rem;color:var(--green);margin-top:.2rem}
+.mc-deck{display:inline-block;font-size:.68rem;padding:.1rem .4rem;border-radius:20px;background:var(--surface-3);color:var(--text-lo);margin-top:.3rem}
+.mc-actions{display:flex;gap:.45rem;margin-top:.75rem}
+.count-badge{display:inline-block;padding:.1rem .4rem;background:var(--surface-3);border-radius:20px;font-size:.72rem;color:var(--text-md);margin-left:.35rem}
 
-  const parseRawBuffer = (fullText) => {
-    compiledSentences = [];
-    compiledTextBlock = "";
+/* ── Study area ── */
+.study-header{display:flex;align-items:center;flex-wrap:wrap;gap:.9rem;margin-bottom:1.2rem}
+.study-title{font-size:1.1rem;font-weight:700;flex:1}
 
-    // Limpa quebras de linha sujas
-    let lines = fullText.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
-    // FILTRO DE LIXO: Remove cabeçalhos e rodapés específicos do CIMV e Mairo Vergara
-    lines = lines.filter(line => {
-      const up = line.toUpperCase();
-      if (up.includes("CIMV") || up.includes("CURSO DE INGL") || up.includes("MAIRO VERGARA") || up.includes("2019") || up.includes("2020")) return false;
-      if (/^\d+$/.test(line)) return false; // Remove números soltos de páginas
-      return true;
-    });
+/* Sub-tabs */
+.study-subtab-nav{display:flex;gap:.4rem;border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:.1rem}
+.study-subtab{padding:.45rem 1rem;border-radius:var(--r-sm) var(--r-sm) 0 0;font-size:.83rem;font-weight:500;color:var(--text-md);transition:color .2s,background .2s;border-bottom:2px solid transparent}
+.study-subtab:hover{color:var(--text-hi)}
+.study-subtab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.study-view{display:none}
+.study-view.active{display:block;animation:fadeIn .2s}
 
-    let startLinha = -1;
-    let startTreino = -1;
+/* Linha a Linha toolbar */
+.ll-toolbar{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem}
+.accent-selector{display:flex;align-items:center;gap:.35rem}
+.accent-label{font-size:.75rem;color:var(--text-lo);white-space:nowrap}
+.accent-btn{padding:.3rem .6rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.78rem;color:var(--text-md);transition:all .15s}
+.accent-btn:hover{border-color:var(--accent-dim);color:var(--text-hi)}
+.accent-btn.active{border-color:var(--accent);background:var(--accent-glow);color:var(--accent)}
+.ll-progress-wrap{flex:1;height:4px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.ll-progress-bar{height:100%;width:0;background:var(--green);transition:width .4s}
+.ll-progress-text{font-size:.75rem;color:var(--text-lo);white-space:nowrap}
 
-    // Encontra os marcadores do curso
-    for (let i = 0; i < lines.length; i++) {
-      const up = lines[i].toUpperCase();
-      if (up.includes("TEXTO LINHA A LINHA")) startLinha = i;
-      if (up.includes("TEXTO PARA TREINAMENTO")) startTreino = i;
-    }
+/* Sentence cards */
+.sentences-list{display:flex;flex-direction:column;gap:.85rem}
+.sentence-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.1rem 1.3rem;transition:border-color .25s,background .25s}
+.sentence-card.playing{border-color:var(--accent);background:var(--surface-2)}
+.sentence-card.sc-checked{border-color:var(--green);background:rgba(63,185,80,.06)}
+.sentence-num{font-size:.7rem;color:var(--text-lo);font-family:var(--mono);margin-bottom:.35rem}
+.sentence-en{font-size:1rem;line-height:1.7}
+.sentence-pt{font-size:.88rem;color:var(--accent);line-height:1.6;margin-top:.45rem;display:none}
+.sentence-pt.visible{display:block;animation:fadeIn .2s}
+.sentence-controls{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem;align-items:center}
 
-    // EXTRAÇÃO LINHA A LINHA
-    if (startLinha !== -1) {
-      let endLinha = startTreino !== -1 ? startTreino : lines.length;
-      let chunkLines = lines.slice(startLinha + 1, endLinha);
+/* Check button */
+.check-btn{display:inline-flex;align-items:center;gap:.3rem;padding:.35rem .75rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.78rem;color:var(--text-md);transition:all .18s}
+.check-btn:hover{border-color:var(--green);color:var(--green)}
+.check-btn.checked{background:rgba(63,185,80,.15);border-color:var(--green);color:var(--green);font-weight:600}
+.check-btn.checked::before{content:'✔ '}
 
-      let tempEn = "";
-      let tempPt = "";
+/* Training text */
+.training-controls{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
+.training-progress-wrap{height:4px;background:var(--surface-3);border-radius:2px;overflow:hidden;margin-bottom:1.4rem}
+.training-progress-bar{height:100%;width:0;background:var(--accent);transition:width .35s}
+.training-text-view{font-size:1.05rem;line-height:2;color:var(--text-md);user-select:none}
+.ts{padding:.1rem .2rem;border-radius:3px;transition:background .25s,color .25s;cursor:pointer}
+.ts:hover{background:var(--surface-2);color:var(--text-hi)}
+.ts.ts-active{background:var(--accent-glow);color:var(--text-hi);border-radius:var(--r-sm)}
+.ts.ts-done{color:var(--text-lo)}
 
-      for (let i = 0; i < chunkLines.length; i++) {
-        let line = chunkLines[i];
-        
-        // Verifica se a linha é português: tem acento ou palavras-chave fortes do idioma
-        let hasPtAccents = /[ãáéíóúçÂÊÎÔÛÃÕ]/i.test(line);
-        let hasPtWords = /\b(um|uma|ele|ela|que|do|da|no|na|para|com|se|os|as|era|foi|tinha|havia|qual|deles|você|mesmo|esposa|marido)\b/i.test(line);
+/* ── SRS Review ── */
+.review-area{max-width:600px;margin:0 auto}
+.review-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem}
+.review-counter{font-size:.82rem;color:var(--text-lo)}
+.requeue-badge{font-size:.75rem;padding:.2rem .55rem;background:rgba(248,81,73,.12);color:var(--red);border:1px solid var(--red);border-radius:20px}
+.srs-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:2.4rem 1.8rem;text-align:center;min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.9rem;margin-bottom:1.4rem;transition:box-shadow .3s}
+.srs-card:has(.card-back:not(.hidden)){box-shadow:0 0 0 1px var(--accent),0 0 22px var(--accent-glow)}
+.card-tag{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-lo)}
+.card-text{font-size:1.3rem;font-weight:600;line-height:1.5}
+.card-translation{font-size:1.05rem;color:var(--accent);margin-top:.4rem}
+.card-context{font-size:.83rem;color:var(--text-md);font-style:italic;margin-top:.25rem}
+.card-audio-btn{margin-top:.6rem}
+.card-actions-row{text-align:center;margin-bottom:1rem}
+.card-feedback{display:flex;gap:.65rem;justify-content:center;flex-wrap:wrap;align-items:center}
+.feedback-label{font-size:.78rem;color:var(--text-md);width:100%;text-align:center;margin-bottom:.2rem}
+.review-done{text-align:center;padding:3.5rem 2rem}
+.done-icon{font-size:2.2rem;color:var(--accent);margin-bottom:.9rem}
+.review-done h3{font-size:1.35rem;margin-bottom:.45rem}
+.review-done p{color:var(--text-md);margin-bottom:1.4rem}
 
-        if (hasPtAccents || hasPtWords) {
-          tempPt += (tempPt ? " " : "") + line;
-        } else {
-          // É uma linha em inglês. Se já havia um bloco formado, salva no baralho.
-          if (tempEn && tempPt) {
-            compiledSentences.push({ en: tempEn, pt: tempPt });
-            tempEn = line;
-            tempPt = "";
-          } else {
-            tempEn += (tempEn ? " " : "") + line;
-          }
-        }
-      }
-      if (tempEn) compiledSentences.push({ en: tempEn, pt: tempPt || "Tradução pendente" });
-    }
+/* ── Playlist ── */
+.playlist-controls{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap;margin-bottom:1.4rem}
+.toggle-label{display:flex;align-items:center;gap:.35rem;font-size:.83rem;color:var(--text-md);cursor:pointer}
+.toggle-label input[type="checkbox"]{accent-color:var(--accent);width:15px;height:15px}
+.loop-counter{font-size:.8rem;color:var(--text-lo)}
+.loop-counter strong{color:var(--accent)}
+.playlist-player{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:1.4rem 1.8rem;margin-bottom:1.8rem;text-align:center}
+.np-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-lo);margin-bottom:.45rem}
+.np-text{font-size:1.1rem;font-weight:600;margin-bottom:.25rem}
+.np-translation{font-size:.88rem;color:var(--accent);margin-bottom:.9rem}
+.np-progress{height:3px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.np-bar{height:100%;width:0;background:var(--accent);transition:width .3s}
+.playlist-items{display:flex;flex-direction:column;gap:.45rem}
+.playlist-item{display:flex;align-items:center;gap:.65rem;padding:.65rem .9rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);font-size:.85rem}
+.playlist-item.pi-active{border-color:var(--accent);background:var(--accent-glow)}
+.pi-num{font-family:var(--mono);font-size:.72rem;color:var(--text-lo);flex-shrink:0;width:26px}
+.pi-text{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pi-badge{font-size:.7rem;padding:.12rem .45rem;border-radius:20px;background:var(--surface-3);color:var(--text-md);flex-shrink:0}
 
-    // EXTRAÇÃO DO TEXTO DE TREINAMENTO
-    if (startTreino !== -1) {
-      compiledTextBlock = lines.slice(startTreino + 1).join(" ");
-    } else {
-      compiledTextBlock = compiledSentences.map(s => s.en).join(" ");
-    }
-  };
+/* ── Settings ── */
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1.1rem}
+.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.3rem}
+.settings-card h3{font-size:.92rem;font-weight:700;margin-bottom:.45rem}
+.settings-card p{font-size:.83rem;color:var(--text-md);margin-bottom:.9rem}
+.settings-actions{display:flex;gap:.65rem;flex-wrap:wrap}
+.tts-test{display:flex;gap:.45rem;margin-top:.7rem}
+.tts-test input{flex:1}
+.danger-zone{border-color:rgba(248,81,73,.3)}
+.danger-zone h3{color:var(--red)}
+.stats-display{display:flex;flex-direction:column;gap:.45rem}
+.stat-row{display:flex;justify-content:space-between;font-size:.83rem}
+.stat-row span:last-child{color:var(--accent);font-weight:600}
 
-  const updateInputVisibility = (e) => {
-    const isPdf = document.querySelector('input[name="importMode"]:checked').value === 'pdf';
-    const pdfZone = document.getElementById('pdfDropZone');
-    const textZone = document.getElementById('textInputArea');
-    
-    // Força bruta via JS para esmagar regras de CSS presas no cache
-    if (isPdf) {
-      pdfZone.style.setProperty('display', 'block', 'important');
-      textZone.style.setProperty('display', 'none', 'important');
-    } else {
-      pdfZone.style.setProperty('display', 'none', 'important');
-      textZone.style.setProperty('display', 'flex', 'important');
-    }
-  };
+/* Deck management */
+.deck-list{display:flex;flex-direction:column;gap:.45rem;margin-bottom:.75rem}
+.deck-item{display:flex;align-items:center;gap:.55rem;padding:.5rem .75rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);font-size:.83rem}
+.deck-color{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.deck-name{flex:1}
+.deck-count{font-size:.72rem;color:var(--text-lo)}
+.deck-add-form{display:flex;gap:.5rem;margin-top:.5rem}
+.deck-add-form input{flex:1}
 
-  return {
-    init: () => {
-      document.querySelectorAll('input[name="importMode"]').forEach(radio => {
-        radio.addEventListener('click', updateInputVisibility);
-      });
-      updateInputVisibility();
+/* ── Toast / Modal ── */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-hi);padding:.7rem 1.3rem;border-radius:var(--r-xl);font-size:.86rem;font-weight:500;z-index:9999;opacity:0;transition:transform .3s,opacity .3s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
+.modal{background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-xl);padding:1.8rem;max-width:380px;width:90%}
+.modal-msg{font-size:.93rem;margin-bottom:1.4rem;text-align:center}
+.modal-actions{display:flex;gap:.65rem;justify-content:flex-end}
 
-      document.getElementById('pdfFileInput').addEventListener('change', async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        TabManager.showToast("Decodificando PDF do Curso...");
-        try {
-          const buffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-          let extractedText = "";
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            extractedText += content.items.map(it => it.str).join(" ") + "\n";
-          }
-          parseRawBuffer(extractedText);
-          
-          if (compiledSentences.length === 0) {
-            TabManager.showToast("Nenhuma estrutura compatível encontrada.", 'error');
-            return;
-          }
-          
-          TabManager.showToast(`${compiledSentences.length} frases mapeadas!`, 'success');
-          if (!document.getElementById('moduleTitle').value) document.getElementById('moduleTitle').value = file.name.replace(".pdf", "");
-        } catch (err) {
-          console.error(err); TabManager.showToast("Falha ao ler PDF.", 'error');
-        }
-        e.target.value = '';
-      });
+/* ── Utility ── */
+.hidden{display:none!important}
+.empty-state{color:var(--text-md);font-size:.88rem;padding:1.75rem 0}
 
-      document.getElementById('btnProcessModule').onclick = () => {
-        const title = document.getElementById('moduleTitle').value.trim();
-        if (!title) return TabManager.showToast("Defina um título para a lição.", 'error');
-        
-        const mode = document.querySelector('input[name="importMode"]:checked').value;
-        if (mode === 'text') {
-          const enLines = document.getElementById('rawTextEn').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
-          const ptLines = document.getElementById('rawTextPt').value.split('\n').map(x=>x.trim()).filter(x=>x.length>0);
-          if (!enLines.length) return TabManager.showToast("Insira as frases em inglês.", 'error');
-          compiledSentences = enLines.map((en, idx) => ({ en, pt: ptLines[idx] || "Tradução pendente" }));
-          compiledTextBlock = enLines.join(" ");
-        }
+/* ── Responsive ── */
+@media(max-width:640px){
+  .app-header{flex-wrap:wrap;padding:.55rem 1rem;gap:.6rem}
+  .tab-btn{padding:.38rem .65rem;font-size:.76rem}
+  .form-row{flex-direction:column}
+  .settings-grid{grid-template-columns:1fr}
+  .modules-grid{grid-template-columns:1fr}
+  .study-header{flex-direction:column;align-items:flex-start}
+  .card-text{font-size:1.1rem}
+  .srs-card{padding:1.7rem 1.1rem}
+  .app-main{padding:1.4rem .9rem 4rem}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+EOF
+echo "style.css: $(wc -l < /mnt/user-data/outputs/english-srs-app/style.css) linhas"
+Saída
 
-        if (!compiledSentences || !compiledSentences.length) return TabManager.showToast("Nenhum dado pronto para salvar.", 'error');
-
-        const sentences = compiledSentences.map(s => ({ id: 's_' + Math.random().toString(36).substring(2,11), english: s.en, portuguese: s.pt }));
-        DB.addModule({ id: 'mod_' + Math.random().toString(36).substring(2,11), title, sentences, fullText: compiledTextBlock });
-        
-        document.getElementById('mainCreateForm').reset();
-        compiledSentences = []; compiledTextBlock = ""; updateInputVisibility();
-        
-        TabManager.showToast("Módulo salvo na base de dados!", 'success');
-        ImportPanel.renderGrid();
-      };
-
-      ImportPanel.renderGrid();
-    },
-    renderGrid: () => {
-      const box = document.getElementById('compiledModulesGrid');
-      const mods = DB.getModules();
-      if (!mods.length) { box.innerHTML = '<p class="empty-state">Nenhum módulo importado.</p>'; return; }
-      box.innerHTML = mods.map(m => `
-        <div class="module-card">
-          <div class="mc-title">${m.title}</div>
-          <div class="mc-meta">${m.sentences.length} estruturas extraídas</div>
-          <div class="mc-actions">
-            <button class="btn btn-accent btn-sm" onclick="TabManager.switchTab('study'); StudyPanel.open('${m.id}')">Estudar</button>
-            <button class="btn btn-danger btn-sm" onclick="ImportPanel.delete('${m.id}')">🗑</button>
-          </div>
-        </div>
-      `).join('');
-    },
-    delete: async (id) => {
-      if (await TabManager.askConfirm("Apagar módulo e todos os cards vinculados a ele?")) {
-        DB.deleteModule(id); ImportPanel.renderGrid(); GlobalApp.updateBadges();
-      }
-    }
-  };
-})();
-
-// ── ABA 2: ESTUDO ──
-const StudyPanel = (() => {
-  let activeModule = null;
-  return {
-    init: () => {
-      document.getElementById('btnLeaveStudy').onclick = () => {
-        document.getElementById('studyActiveView').classList.add('hidden'); document.getElementById('studySelectorView').classList.remove('hidden');
-      };
-      document.getElementById('btnToggleLinha').onclick = () => {
-        document.getElementById('btnToggleLinha').classList.add('active'); document.getElementById('btnToggleTexto').classList.remove('active');
-        document.getElementById('studyLinhaContainer').classList.remove('hidden'); document.getElementById('studyTextoContainer').classList.add('hidden');
-      };
-      document.getElementById('btnToggleTexto').onclick = () => {
-        document.getElementById('btnToggleTexto').classList.add('active'); document.getElementById('btnToggleLinha').classList.remove('active');
-        document.getElementById('studyTextoContainer').classList.remove('hidden'); document.getElementById('studyLinhaContainer').classList.add('hidden');
-      };
-      document.getElementById('studyVoicePicker').onchange = (e) => VoiceEngine.setVoice(e.target.value);
-      document.getElementById('studyRatePicker').onchange = (e) => VoiceEngine.setRate(e.target.value);
-      
-      document.getElementById('btnPlayFullStory').onclick = () => {
-        let currentIdx = 0;
-        const readNext = () => {
-          if (!activeModule || currentIdx >= activeModule.sentences.length) return;
-          const currentSentence = activeModule.sentences[currentIdx];
-          const element = document.getElementById(`scard_${currentSentence.id}`);
-          if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          VoiceEngine.speak(currentSentence.english, () => { currentIdx++; setTimeout(readNext, 1000); });
-        };
-        readNext();
-      };
-      document.getElementById('btnStopFullStory').onclick = () => VoiceEngine.stop();
-    },
-    refresh: () => {
-      const box = document.getElementById('studyAvailableGrid');
-      const mods = DB.getModules();
-      if (!mods.length) { box.innerHTML = '<p class="empty-state">Importe módulos primeiro.</p>'; return; }
-      box.innerHTML = mods.map(m => `
-        <div class="module-card">
-          <div class="mc-title">${m.title}</div>
-          <button class="btn btn-primary btn-sm" style="width:100%; margin-top:.5rem; justify-content:center;" onclick="StudyPanel.open('${m.id}')">Abrir Lição</button>
-        </div>
-      `).join('');
-    },
-    open: (id) => {
-      activeModule = DB.getModules().find(m => m.id === id); if (!activeModule) return;
-      document.getElementById('studySelectorView').classList.add('hidden'); document.getElementById('studyActiveView').classList.remove('hidden');
-      document.getElementById('activeStudyTitle').textContent = activeModule.title;
-      VoiceEngine.init('studyVoicePicker');
-      
-      const container = document.getElementById('studyLinhaContainer');
-      container.innerHTML = activeModule.sentences.map((s, index) => {
-        const isChecked = DB.hasCard(s.id);
-        return `
-          <div class="sentence-card ${isChecked ? 'card-active-green' : ''}" id="scard_${s.id}">
-            <div class="sentence-num">ESTRUTURA ${index + 1}</div>
-            <div class="sentence-en">${s.english}</div>
-            <div class="sentence-pt">${s.portuguese}</div>
-            <div class="sentence-controls">
-              <button class="btn btn-accent btn-sm" onclick="VoiceEngine.speak(\`${s.english.replace(/'/g, "\\'")}\`)">🔊 Ouvir</button>
-              <button class="btn ${isChecked ? 'btn-primary' : 'btn-ghost'} btn-sm check-toggle-btn" data-sid="${s.id}">✔ Concluído</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-      container.querySelectorAll('.check-toggle-btn').forEach(btn => { btn.onclick = () => StudyPanel.toggleCheck(btn, btn.dataset.sid); });
-      document.getElementById('blockFullTextParagraph').textContent = activeModule.fullText;
-    },
-    toggleCheck: (buttonElement, sentenceId) => {
-      const sentence = activeModule.sentences.find(x => x.id === sentenceId);
-      const parentCard = document.getElementById(`scard_${sentenceId}`);
-      if (DB.hasCard(sentenceId)) {
-        DB.removeCardByOrigin(sentenceId);
-        buttonElement.className = "btn btn-ghost btn-sm check-toggle-btn";
-        if (parentCard) parentCard.classList.remove('card-active-green');
-        TabManager.showToast("Removido do Anki.");
-      } else {
-        DB.addCard({ id: 'card_' + Math.random().toString(36).substring(2,11), sentenceId: sentenceId, originModuleId: activeModule.id, deckId: 'default_deck', english: sentence.english, portuguese: sentence.portuguese, voiceName: document.getElementById('studyVoicePicker').value, history: SRS.createTemplate() });
-        buttonElement.className = "btn btn-primary btn-sm check-toggle-btn";
-        if (parentCard) parentCard.classList.add('card-active-green');
-        TabManager.showToast("Adicionado ao Anki!", "success");
-      }
-      GlobalApp.updateBadges();
-    }
-  };
-})();
-
-// ── ABA 3: BARALHOS ──
-const DecksPanel = (() => {
-  return {
-    init: () => {
-      document.getElementById('btnCreateDeck').onclick = () => {
-        const name = document.getElementById('newDeckName').value.trim(); if (!name) return;
-        DB.addDeck(name); document.getElementById('newDeckName').value = ''; TabManager.showToast("Baralho criado!", 'success'); DecksPanel.refresh();
-      };
-      document.getElementById('btnSaveManualCard').onclick = () => {
-        const deckId = document.getElementById('cardDeckDestiny').value; const voiceName = document.getElementById('cardVoiceDestiny').value;
-        const en = document.getElementById('manualCardEn').value.trim(); const pt = document.getElementById('manualCardPt').value.trim();
-        if (!en || !pt) return TabManager.showToast("Preencha Frente e Verso.", 'error');
-        DB.addCard({ id: 'card_' + Math.random().toString(36).substring(2,11), sentenceId: null, originModuleId: null, deckId, english: en, portuguese: pt, voiceName, history: SRS.createTemplate() });
-        document.getElementById('manualCardEn').value = ''; document.getElementById('manualCardPt').value = ''; TabManager.showToast("Card inserido no baralho!", 'success'); DecksPanel.refresh();
-      };
-    },
-    refresh: () => {
-      const container = document.getElementById('decksManagementContainer'); const decks = DB.getDecks(); const cards = DB.getCards();
-      container.innerHTML = decks.map(d => {
-        const totalCards = cards.filter(c => c.deckId === d.id).length;
-        return `
-          <div class="voice-dashboard-panel" style="margin-bottom:.5rem; justify-content:space-between;">
-            <div><strong>🗂 ${d.name}</strong> <span class="count-badge">${totalCards} cards</span></div>
-            ${d.id !== 'default_deck' ? `<button class="btn btn-danger btn-sm" onclick="DecksPanel.delete('${d.id}')">Excluir</button>` : '<span style="font-size:0.8rem; color:var(--text-lo);">Sistema</span>'}
-          </div>
-        `;
-      }).join('');
-      const sel = document.getElementById('cardDeckDestiny'); if(sel) sel.innerHTML = decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      VoiceEngine.init('cardVoiceDestiny');
-    },
-    delete: async (id) => { if (await TabManager.askConfirm("Apagar este baralho? Os cards voltarão para o baralho Principal.")) { DB.deleteDeck(id); DecksPanel.refresh(); } }
-  };
-})();
-
-// ── ABA 4: REVISÃO (ANKI) ──
-const ReviewPanel = (() => {
-  let activeQueue = []; let index = 0;
-  return {
-    init: () => {
-      document.getElementById('btnRevealReviewAnswer').onclick = () => {
-        document.getElementById('reviewCardBackBlock').classList.remove('hidden'); document.getElementById('reviewActionTriggerRow').classList.add('hidden'); document.getElementById('reviewFeedbackButtonRow').classList.remove('hidden');
-      };
-      document.getElementById('btnSpeakReviewFront').onclick = () => {
-        if (activeQueue[index]) { VoiceEngine.setVoice(activeQueue[index].voiceName); VoiceEngine.speak(activeQueue[index].english); }
-      };
-      document.getElementById('reviewFeedbackButtonRow').onclick = (e) => {
-        const btn = e.target.closest('[data-q]'); if (!btn) return;
-        const quality = Number(btn.dataset.q); const card = activeQueue[index];
-        card.history = SRS.processResponse(card.history, quality); DB.saveCards;
-        if (quality < 3) { const failedCard = activeQueue.splice(index, 1)[0]; activeQueue.push(failedCard); TabManager.showToast("Retido para reavaliação!"); } 
-        else { index++; TabManager.showToast("Agendado!"); }
-        ReviewPanel.renderCard();
-      };
-    },
-    startSession: () => {
-      const allCards = DB.getCards(); activeQueue = allCards.filter(c => SRS.isDue(c)); index = 0;
-      document.getElementById('reviewSessionSubtitle').textContent = `${activeQueue.length} cards agendados para hoje`;
-      if (!activeQueue.length) { document.getElementById('reviewActiveContainer').classList.add('hidden'); document.getElementById('reviewEmptyState').classList.remove('hidden'); } 
-      else { document.getElementById('reviewEmptyState').classList.add('hidden'); document.getElementById('reviewActiveContainer').classList.remove('hidden'); ReviewPanel.renderCard(); }
-    },
-    renderCard: () => {
-      if (index >= activeQueue.length) { document.getElementById('reviewActiveContainer').classList.add('hidden'); document.getElementById('reviewEmptyState').classList.remove('hidden'); GlobalApp.updateBadges(); return; }
-      const card = activeQueue[index]; const decks = DB.getDecks(); const matchedDeck = decks.find(d => d.id === card.deckId);
-      document.getElementById('reviewCardDeckLabel').textContent = matchedDeck ? matchedDeck.name.toUpperCase() : "BARALHO";
-      document.getElementById('reviewTextFront').textContent = card.english; document.getElementById('reviewTextBack').textContent = card.portuguese;
-      document.getElementById('reviewCardBackBlock').classList.add('hidden'); document.getElementById('reviewActionTriggerRow').classList.remove('hidden'); document.getElementById('reviewFeedbackButtonRow').classList.add('hidden');
-      VoiceEngine.setVoice(card.voiceName); VoiceEngine.speak(card.english);
-    }
-  };
-})();
-
-// ── ABA 5: PLAYLIST ──
-const PlaylistPanel = (() => {
-  let isPlaying = false; let trackIdx = 0; let delayTimer = null;
-  return {
-    init: () => {
-      document.getElementById('playlistBtnPlay').onclick = () => {
-        if (isPlaying) { isPlaying = false; document.getElementById('playlistBtnPlay').textContent = "▶ Iniciar"; clearTimeout(delayTimer); VoiceEngine.stop(); } 
-        else { isPlaying = true; document.getElementById('playlistBtnPlay').textContent = "⏸ Pausar"; PlaylistPanel.executeTrack(); }
-      };
-      document.getElementById('playlistBtnNext').onclick = () => { PlaylistPanel.shift(1); };
-      document.getElementById('playlistBtnPrev').onclick = () => { PlaylistPanel.shift(-1); };
-    },
-    refresh: () => {
-      const container = document.getElementById('playlistTracksBox'); const mods = DB.getModules();
-      let totalSeconds = 0; mods.forEach(m => totalSeconds += (m.sentences.length * 4));
-      document.getElementById('playlistDurationTrack').textContent = `Tempo estimado: ${Math.round(totalSeconds / 60)} minutos`;
-      if (!mods.length) { container.innerHTML = '<p class="empty-state">Nenhuma lição adicionada.</p>'; return; }
-      container.innerHTML = mods.map((m, idx) => `
-        <div class="playlist-item ${trackIdx === idx && isPlaying ? 'active-track' : ''}">
-          <div><strong>${idx + 1}. Audio Compilado — ${m.title}</strong></div>
-          <span class="count-badge">👁 ${DB.getViewCount('track_views_' + m.id)} execuções</span>
-        </div>
-      `).join('');
-    },
-    executeTrack: () => {
-      const mods = DB.getModules(); if (!mods.length || !isPlaying) return;
-      if (trackIdx >= mods.length) { if (document.getElementById('playlistLoopToggle').checked) { trackIdx = 0; } else { isPlaying = false; document.getElementById('playlistBtnPlay').textContent = "▶ Iniciar"; return; } }
-      const activeMod = mods[trackIdx]; document.getElementById('playlistCurrentTitle').textContent = activeMod.title; document.getElementById('playlistCurrentSub').textContent = "Tocando sequencialmente...";
-      const key = 'track_views_' + activeMod.id; DB.incrementViewCount(key); PlaylistPanel.refresh();
-      let sentencePointer = 0;
-      const readBlock = () => {
-        if (!isPlaying || trackIdx >= mods.length) return;
-        if (sentencePointer >= activeMod.sentences.length) { trackIdx++; delayTimer = setTimeout(PlaylistPanel.executeTrack, 1500); return; }
-        const s = activeMod.sentences[sentencePointer]; document.getElementById('playlistProgressIndicator').style.width = `${((sentencePointer + 1) / activeMod.sentences.length) * 100}%`;
-        VoiceEngine.speak(s.english, () => { sentencePointer++; delayTimer = setTimeout(readBlock, 1200); });
-      };
-      readBlock();
-    },
-    shift: (offset) => { clearTimeout(delayTimer); VoiceEngine.stop(); trackIdx += offset; const mods = DB.getModules(); if (trackIdx < 0) trackIdx = mods.length - 1; if (trackIdx >= mods.length) trackIdx = 0; if (isPlaying) PlaylistPanel.executeTrack(); else PlaylistPanel.refresh(); }
-  };
-})();
-
-// ── ORQUESTRAÇÃO GLOBAL ──
-const GlobalApp = (() => {
-  return {
-    init: () => {
-      TabManager.init(); ImportPanel.init(); StudyPanel.init(); DecksPanel.init(); ReviewPanel.init(); PlaylistPanel.init();
-      document.getElementById('btnConfigExport').onclick = () => { const blob = new Blob([localStorage.getItem('englishflow_premium_db')], { type: 'application/json' }); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `englishflow_backup_${SRS.todayStr()}.json` }); a.click(); };
-      document.getElementById('configImportFile').onchange = async (e) => { try { const rawText = await e.target.files[0].text(); if (DB.importRawJSON(rawText)) { TabManager.showToast("Banco carregado com sucesso!", 'success'); setTimeout(() => location.reload(), 1000); } else { TabManager.showToast("Arquivo JSON inválido.", 'error'); } } catch { TabManager.showToast("Falha ao abrir arquivo.", 'error'); } };
-      document.getElementById('btnConfigClearAll').onclick = async () => { if (await TabManager.askConfirm("Zerar todos os dados, baralhos e histórias?")) { DB.clearAll(); location.reload(); } };
-      GlobalApp.updateBadges();
-    },
-    updateBadges: () => {
-      const dues = DB.getCards().filter(c => SRS.isDue(c)).length; const badge = document.getElementById('review-badge');
-      if (dues > 0) { badge.textContent = dues; badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
-    }
-  };
-})();
-
-document.addEventListener('DOMContentLoaded', GlobalApp.init);
+style.css: 278 linhas
